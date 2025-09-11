@@ -15,6 +15,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/yaml"
 
+	"github.com/gaol/openqe/cmd/auth"
 	core "github.com/gaol/openqe/cmd/core"
 	"github.com/gaol/openqe/cmd/openshift"
 	"github.com/spf13/cobra"
@@ -74,6 +75,7 @@ func addCommands(rootCommand *cobra.Command) {
 	rootCommand.AddCommand(VersionCommand())
 	rootCommand.AddCommand(core.NewTLSCommand())
 	rootCommand.AddCommand(openshift.NewCommand())
+	rootCommand.AddCommand(auth.NewAuthCommand())
 }
 
 func main() {
