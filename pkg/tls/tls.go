@@ -268,3 +268,31 @@ func CheckCert(cert string, certs string) (bool, error) {
 	}
 	return false, nil
 }
+
+// CheckCACertInBundle checks if a CA certificate file is included in a CA bundle file
+func CheckCACertInBundle(caCertFile, caBundleFile string) (bool, error) {
+	// Check if CA cert file exists
+	if !utils.FileExists(caCertFile) {
+		return false, fmt.Errorf("CA certificate file does not exist: %s", caCertFile)
+	}
+
+	// Check if CA bundle file exists
+	if !utils.FileExists(caBundleFile) {
+		return false, fmt.Errorf("CA bundle file does not exist: %s", caBundleFile)
+	}
+
+	// Read CA cert file
+	caCertBytes, err := os.ReadFile(caCertFile)
+	if err != nil {
+		return false, fmt.Errorf("failed to read CA certificate file: %w", err)
+	}
+
+	// Read CA bundle file
+	caBundleBytes, err := os.ReadFile(caBundleFile)
+	if err != nil {
+		return false, fmt.Errorf("failed to read CA bundle file: %w", err)
+	}
+
+	// Check if CA cert is in bundle
+	return CheckCert(string(caCertBytes), string(caBundleBytes))
+}
