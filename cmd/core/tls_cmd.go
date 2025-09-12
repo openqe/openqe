@@ -3,6 +3,7 @@ package core
 import (
 	"github.com/gaol/openqe/pkg/tls"
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 )
 
 func NewTLSCommand() *cobra.Command {
@@ -20,11 +21,11 @@ func NewTLSCommand() *cobra.Command {
 }
 
 // ============    CA-GEN COMMAND     ==============================
-type CAGenOptions struct {
-	subject    string
-	dnsName    string
-	caKeyFile  string
-	caCertFile string
+func BindCAOptions(opts *tls.CAOptions, flags *flag.FlagSet) {
+	flags.StringVar(&opts.Subject, "ca-subject", opts.Subject, "The CA certificate subject used to generate the TLS CA.")
+	flags.StringVar(&opts.DNSName, "ca-dns-name", opts.DNSName, "The SAN used to generate the TLS CA.")
+	flags.StringVar(&opts.CaKeyFile, "ca-key-file", opts.CaKeyFile, "The CA private key file path to be generated to.")
+	flags.StringVar(&opts.CaCertFile, "ca-cert-file", opts.CaCertFile, "The CA certificate file path to be generated to.")
 }
 
 func NewCAGenCommand() *cobra.Command {
@@ -35,29 +36,26 @@ func NewCAGenCommand() *cobra.Command {
 		SilenceUsage:  true,
 	}
 
-	var opts CAGenOptions
-	cmd.Flags().StringVar(&opts.subject, "subject", "C=China, O=OpenShift, OU=Hypershift QE, CN=default-ca", "The CA certificate subject used to generate the TLS CA.")
-	cmd.Flags().StringVar(&opts.dnsName, "dns-name", "openqe.github.io", "The SAN used to generate the TLS CA.")
-	cmd.Flags().StringVar(&opts.caKeyFile, "ca-key-file", "ca.key", "The CA private key file path to be generated to.")
-	cmd.Flags().StringVar(&opts.caCertFile, "ca-cert-file", "ca.crt", "The CA certificate file path to be generated to.")
+	opts := tls.DefaultCAOptions()
+	BindCAOptions(opts, cmd.Flags())
 	cmd.Run = func(cmd *cobra.Command, args []string) {
-		if err := tls.GenerateCAToFiles(opts.subject, opts.dnsName, opts.caKeyFile, opts.caCertFile); err != nil {
+		if err := tls.GenerateCAToFiles(opts); err != nil {
 			cmd.Printf("Failed to generate the CA key/cert pair: %s\n", err)
 			return
 		}
-		cmd.Printf("CA generated to caKeyFile: %s, caCertFile: %s\n", opts.caKeyFile, opts.caCertFile)
+		cmd.Printf("CA generated to caKeyFile: %s, caCertFile: %s\n", opts.CaKeyFile, opts.CaCertFile)
 	}
 	return cmd
 }
 
 // ============    TLS CERT-GEN COMMAND     ==============================
-type PKIGenOptions struct {
-	subject    string
-	dnsName    string
-	caKeyFile  string
-	caCertFile string
-	certFile   string
-	keyFile    string
+
+func BindPKIOptions(opts *tls.PKIOptions, flags *flag.FlagSet) {
+	BindCAOptions(opts.CaGenOpt, flags)
+	flags.StringVar(&opts.CertFile, "tls-cert-file", opts.CertFile, "The file path of the TLS certificate to be generated to.")
+	flags.StringVar(&opts.KeyFile, "tls-key-file", opts.KeyFile, "The file path of the TLS private key to be generated to.")
+	flags.StringVar(&opts.Subject, "subject", opts.Subject, "The TLS certificate subject.")
+	flags.StringVar(&opts.DNSName, "dns-name", opts.DNSName, "The SAN added to the TLS certificate.")
 }
 
 func NewTLSGenCommand() *cobra.Command {
@@ -71,19 +69,14 @@ You can use the 'tls ca-gen' command to generate a CA key/cert pair for testing 
 		SilenceUsage:  true,
 	}
 
-	var opts PKIGenOptions
-	cmd.Flags().StringVar(&opts.subject, "subject", "C=China, O=OpenShift, OU=Hypershift QE, CN=default-server", "The TLS certificate subject.")
-	cmd.Flags().StringVar(&opts.dnsName, "dns-name", "server.openqe.github.io", "The SAN used to generate the TLS certificate.")
-	cmd.Flags().StringVar(&opts.caKeyFile, "ca-key-file", "ca.key", "The file from which to read the TLS CA private key.")
-	cmd.Flags().StringVar(&opts.caCertFile, "ca-cert-file", "ca.crt", "The file from which to read TLS CA certificate file.")
-	cmd.Flags().StringVar(&opts.keyFile, "tls-key-file", "tls.key", "The file path of the TLS private key to be generated to.")
-	cmd.Flags().StringVar(&opts.certFile, "tls-cert-file", "tls.crt", "The file path of the TLS certificate to be generated to.")
+	opts := tls.DefaultPKIOptions()
+	BindPKIOptions(opts, cmd.Flags())
 	cmd.Run = func(cmd *cobra.Command, args []string) {
-		if err := tls.GenerateTLSKeyCertPairToFiles(opts.subject, opts.dnsName, opts.caKeyFile, opts.caCertFile, opts.keyFile, opts.certFile); err != nil {
+		if err := tls.GenerateTLSKeyCertPairToFiles(opts); err != nil {
 			cmd.Printf("Failed to generate the TLS key/cert pair: %s\n", err)
 			return
 		}
-		cmd.Printf("TLS key/cert paris gets generated to keyFile: %s, certFile: %s\n", opts.keyFile, opts.certFile)
+		cmd.Printf("TLS key/cert paris gets generated to keyFile: %s, certFile: %s\n", opts.KeyFile, opts.CertFile)
 	}
 	return cmd
 }

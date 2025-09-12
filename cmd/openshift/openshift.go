@@ -1,31 +1,17 @@
 package openshift
 
 import (
-	"fmt"
-
-	"k8s.io/apimachinery/pkg/util/errors"
-
-	"github.com/gaol/openqe/pkg/utils"
+	"github.com/gaol/openqe/pkg/openshift"
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 )
 
 const (
 	KUBE_CONFIG_ENV = "KUBECONFIG"
 )
 
-type OcpOptions struct {
-	KUBECONFIG string
-}
-
-func (o *OcpOptions) Validate() error {
-	var errs []error
-	if o.KUBECONFIG == "" {
-		errs = append(errs, fmt.Errorf("--kubeconfig must be specified"))
-	} else if !utils.FileExists(o.KUBECONFIG) {
-		errs = append(errs, fmt.Errorf("--kubeconfig %s does not exist", o.KUBECONFIG))
-	}
-
-	return errors.NewAggregate(errs)
+func BindOcpOptions(opts *openshift.OcpOptions, flags *flag.FlagSet) {
+	flags.StringVar(&opts.KUBECONFIG, "kubeconfig", opts.KUBECONFIG, "The kubeconfig file used to communicate with the OpenShift cluster")
 }
 
 func NewCommand() *cobra.Command {
@@ -35,10 +21,9 @@ func NewCommand() *cobra.Command {
 		SilenceUsage: true,
 	}
 
-	var opts OcpOptions
-	opts.KUBECONFIG = "~/.kube/config"
-
-	cmd.PersistentFlags().StringVar(&opts.KUBECONFIG, "kubeconfig", "~/.kube/config", "The kubeconfig file used to communicate with the OpenShift cluster")
+	opts := openshift.DefaultOcpOptions()
+	BindOcpOptions(opts, cmd.Flags())
+	cmd.AddCommand(NewImageRegistryCommand())
 	cmd.Run = func(cmd *cobra.Command, args []string) {
 		cmd.Help()
 	}

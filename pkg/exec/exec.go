@@ -4,56 +4,44 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/gaol/openqe/pkg/utils"
 )
 
 type CLI struct {
-	execPath string
-	args     []string
-	stdin    *bytes.Buffer
-	stdout   io.Writer
-	stderr   io.Writer
-	verbose  bool
+	ExecPath string
+	Args     []string
+	Stdin    *bytes.Buffer
+	Stdout   io.Writer
+	Stderr   io.Writer
+	Verbose  bool
 }
 
 // Execute the command and returns stdout/stderr combined into one string
 func (c *CLI) Execute() (string, error) {
-	if c.verbose {
+	if c.Verbose {
 		fmt.Printf("DEBUG: %s\n", c.String())
 	}
-	cmd := exec.Command(c.execPath, c.args...)
-	cmd.Stdin = c.stdin
+	cmd := exec.Command(c.ExecPath, c.Args...)
+	cmd.Stdin = c.Stdin
 	out, err := cmd.CombinedOutput()
 	trimmed := strings.TrimSpace(string(out))
-	if err != nil {
-		return "", err
+	switch err.(type) {
+	case nil:
+		c.Stdout = bytes.NewBuffer(out)
+		return trimmed, nil
+	case *exec.ExitError:
+		return trimmed, &utils.ExitError{ExitError: err.(*exec.ExitError), Cmd: c.ExecPath + " " + strings.Join(c.Args, " "), StdErr: trimmed}
+	default:
+		utils.ErrStack(os.Stderr, fmt.Errorf("unable to execute %q: %v", c.ExecPath, err))
+		// unreachable code
+		return "", nil
 	}
-	return trimmed, nil
-}
-
-// Execute the command and returns the stdout/stderr output as separate strings
-func (c *CLI) Execute2() (string, string, error) {
-	if c.verbose {
-		fmt.Printf("DEBUG: %s\n", c.String())
-	}
-	cmd := exec.Command(c.execPath, c.args...)
-	cmd.Stdin = c.stdin
-	var stdErrBuff, stdOutBuff bytes.Buffer
-	cmd.Stdout = &stdOutBuff
-	cmd.Stderr = &stdErrBuff
-	err := cmd.Run()
-
-	stdOutBytes := stdOutBuff.Bytes()
-	stdErrBytes := stdErrBuff.Bytes()
-	stdOut := strings.TrimSpace(string(stdOutBytes))
-	stdErr := strings.TrimSpace(string(stdErrBytes))
-	if err != nil {
-		return "", "", err
-	}
-	return stdOut, stdErr, nil
 }
 
 func (c *CLI) String() string {
-	return fmt.Sprintf("ExecutePath: %s, Args: %s", c.execPath, strings.Join(c.args, " "))
+	return fmt.Sprintf("ExecutePath: %s, Args: %s", c.ExecPath, strings.Join(c.Args, " "))
 }

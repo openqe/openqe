@@ -1,8 +1,13 @@
 package utils
 
 import (
+	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime/debug"
+	"strings"
 )
 
 func ExpandPath(path string) (string, error) {
@@ -26,4 +31,37 @@ func FileExists(filename string) bool {
 		return false // file does not exist
 	}
 	return false // some other error (e.g. permission denied)
+}
+
+func AllTrue(str string) bool {
+	words := strings.Fields(str) // splits on any whitespace
+	for _, w := range words {
+		if w != "True" {
+			return false
+		}
+	}
+	return true
+}
+
+func AllFalse(str string) bool {
+	words := strings.Fields(str) // splits on any whitespace
+	for _, w := range words {
+		if w != "False" {
+			return false
+		}
+	}
+	return true
+}
+
+func ErrStack(out io.Writer, msg interface{}) {
+	fmt.Fprintln(out, string(debug.Stack()))
+	m := fmt.Sprintf("%v", msg)
+	fmt.Fprintln(out, m)
+}
+
+// ExitError struct
+type ExitError struct {
+	Cmd    string
+	StdErr string
+	*exec.ExitError
 }

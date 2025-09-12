@@ -31,9 +31,9 @@ func NewHtpasswdCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	var opts HtpasswdOption
-	cmd.Flags().StringVar(&opts.username, "username", "", "The username")
-	cmd.Flags().StringVar(&opts.password, "password", "", "The password")
+	opts := &HtpasswdOption{}
+	cmd.Flags().StringVar(&opts.username, "username", opts.username, "The username")
+	cmd.Flags().StringVar(&opts.password, "password", opts.password, "The password")
 	cmd.MarkFlagRequired("username")
 	cmd.MarkFlagRequired("password")
 	cmd.Run = func(cmd *cobra.Command, args []string) {

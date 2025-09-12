@@ -27,6 +27,11 @@ go.work.sum
 # env file
 .env
 
+ca.key
+ca.crt
+tls.key
+tls.crt
+
 # output files
 bin/
 # Editor/IDE

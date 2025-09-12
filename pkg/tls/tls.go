@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gaol/openqe/pkg/utils"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func defaultCertCfg() CertCfg {
@@ -100,7 +102,11 @@ func ParseSubject(subject string) pkix.Name {
 }
 
 /** Generates a CA key/cert pair and save them into different files **/
-func GenerateCAToFiles(subject, dnsName, caKeyFile, caCertFile string) error {
+func GenerateCAToFiles(opts *CAOptions) error {
+	subject := opts.Subject
+	dnsName := opts.DNSName
+	caKeyFile := opts.CaKeyFile
+	caCertFile := opts.CaCertFile
 	if caKeyFile == "" {
 		return errors.New("caKeyFile needs to be specified to save for the TLS CA private key")
 	}
@@ -134,7 +140,13 @@ func GenerateCAToFiles(subject, dnsName, caKeyFile, caCertFile string) error {
 	return nil
 }
 
-func GenerateTLSKeyCertPairToFiles(subject, dnsName, caKeyFile, caCertFile, tlsKeyFile, tlsCertFile string) error {
+func GenerateTLSKeyCertPairToFiles(opts *PKIOptions) error {
+	subject := opts.Subject
+	dnsName := opts.DNSName
+	caKeyFile := opts.CaGenOpt.CaKeyFile
+	caCertFile := opts.CaGenOpt.CaCertFile
+	tlsKeyFile := opts.KeyFile
+	tlsCertFile := opts.CertFile
 	if tlsKeyFile == "" {
 		return errors.New("tlsKeyFile needs to be specified to save for the TLS private key")
 	}
@@ -200,4 +212,59 @@ func GenerateTLSKeyCertPair(subject, dnsName, caKeyFile, caCertFile string) (*rs
 		cfg.DNSNames = []string{dnsName}
 	}
 	return GenerateSignedCertificate(caKey, caCert, &cfg)
+}
+
+// CertInCAFile checks if a certificate represented by certs in PEM format is already inside the ca-bundle ConfigMap.
+// Normally it can be used to test the system ca bundle file at: /etc/pki/tls/certs/ca-bundle.crt
+func CertInCAFile(cert, caFile string) (bool, error) {
+	if !utils.FileExists(caFile) {
+		return false, nil
+	}
+	caContent, err := os.ReadFile(caFile)
+	if err != nil {
+		return false, err
+	}
+	return CheckCert(cert, string(caContent))
+}
+
+// CertInConfigMap checks if a certificate represented by certs in PEM format is already inside the ca-bundle ConfigMap.
+func CertInConfigMap(cm *corev1.ConfigMap, cert string) (bool, error) {
+	bundlePEM, ok := cm.Data["ca-bundle.crt"]
+	if !ok {
+		return false, nil // no bundle present yet
+	}
+	return CheckCert(cert, bundlePEM)
+}
+
+// CheckCert checks if a certificate represented by cert exists in the certificates represented by certs.
+func CheckCert(cert string, certs string) (bool, error) {
+	certBlock, _ := pem.Decode([]byte(cert))
+	wantCert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		return false, err
+	}
+
+	// Walk through all certs
+	rest := []byte(certs)
+	for {
+		var b *pem.Block
+		b, rest = pem.Decode(rest)
+		if b == nil {
+			break
+		}
+		if b.Type != "CERTIFICATE" {
+			continue
+		}
+
+		cert, err := x509.ParseCertificate(b.Bytes)
+		if err != nil {
+			continue
+		}
+
+		// Compare Raw DER (byte-for-byte identity)
+		if cert.Equal(wantCert) {
+			return true, nil
+		}
+	}
+	return false, nil
 }

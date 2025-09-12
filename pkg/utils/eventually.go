@@ -24,6 +24,13 @@ type Supplier[T any] func() (T, error)
 // Predicate is a function that checks if a value of type T meets some condition.
 type Predicate[T any] func(T) bool
 
+func EventuallyDoubleLong[T any](
+	supplier Supplier[T],
+	predicate Predicate[T],
+) (T, error) {
+	return Eventually(supplier, predicate, DoubleLongInterval, DoubleLongTimeout)
+}
+
 func EventuallyDefault[T any](
 	supplier Supplier[T],
 	predicate Predicate[T],
