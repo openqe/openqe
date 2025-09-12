@@ -76,13 +76,15 @@ func addCommands(rootCommand *cobra.Command) {
 	rootCommand.AddCommand(core.NewTLSCommand())
 	rootCommand.AddCommand(openshift.NewCommand())
 	rootCommand.AddCommand(auth.NewAuthCommand())
+	rootCommand.AddCommand(core.NewDocCommand(rootCommand))
 }
 
 func main() {
 	cmd := &cobra.Command{
-		Use:              NAME,
-		SilenceUsage:     true,
-		TraverseChildren: true,
+		Use:               NAME,
+		SilenceUsage:      true,
+		TraverseChildren:  true,
+		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.Help()
 			os.Exit(1)
