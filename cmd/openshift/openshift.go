@@ -24,6 +24,7 @@ func NewCommand() *cobra.Command {
 	opts := openshift.DefaultOcpOptions()
 	BindOcpOptions(opts, cmd.Flags())
 	cmd.AddCommand(NewImageRegistryCommand())
+	cmd.AddCommand(NewDockerPullSecretCommand())
 	cmd.Run = func(cmd *cobra.Command, args []string) {
 		cmd.Help()
 	}
