@@ -7,12 +7,12 @@ import (
 
 	"context"
 	"fmt"
-	"io"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 	occlient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-logr/logr"
 	"github.com/openqe/openqe/pkg/auth"
 	"github.com/openqe/openqe/pkg/tls"
 	"github.com/openqe/openqe/pkg/utils"
@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 var (
@@ -31,12 +32,14 @@ var (
 
 // GetOrCreateOCClient gets or creates a go-client to talk with openshift api server
 // It will cache the client based on the kubeconfig file used
-func GetOrCreateOCClient(kubeconfig string) (c occlient.Client, err error) {
+func GetOrCreateOCClient(kubeconfig string) (occlient.Client, context.Context, logr.Logger, error) {
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
+	ctx := context.TODO()
+	log := ctrl.LoggerFrom(ctx)
 
 	if cachedClient, ok := clientCache[kubeconfig]; ok {
-		return cachedClient, nil
+		return cachedClient, ctx, log, nil
 	}
 
 	restConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
@@ -44,43 +47,39 @@ func GetOrCreateOCClient(kubeconfig string) (c occlient.Client, err error) {
 		&clientcmd.ConfigOverrides{},
 	).ClientConfig()
 	if err != nil {
-		return nil, err
+		return nil, ctx, log, err
 	}
 
 	scheme := runtime.NewScheme()
 	// Register corev1 and configv1 types to the scheme
 	if err := corev1.AddToScheme(scheme); err != nil {
-		return nil, err
+		return nil, ctx, log, err
 	}
 	if err := configv1.Install(scheme); err != nil {
-		return nil, err
+		return nil, ctx, log, err
 	}
 	if err := appsv1.AddToScheme(scheme); err != nil {
-		return nil, err
+		return nil, ctx, log, err
 	}
 	if err := routev1.Install(scheme); err != nil {
-		return nil, err
+		return nil, ctx, log, err
 	}
 	client, err := occlient.New(restConfig, occlient.Options{Scheme: scheme})
 	if err != nil {
-		return nil, err
+		return nil, ctx, log, err
 	}
 
 	clientCache[kubeconfig] = client
-	return client, nil
+	return client, ctx, log, nil
 }
 
 // CreateNamespaceIfNotExists creates a namespace in the OpenShift cluster if it doesn't already exist
 // It returns the *corev1.Namespace if all work good
-func CreateNamespaceIfNotExists(kubeconfig, namespace string, out io.Writer) (*corev1.Namespace, error) {
-	if out == nil {
-		out = io.Discard
-	}
-	client, err := GetOrCreateOCClient(kubeconfig)
+func CreateNamespaceIfNotExists(kubeconfig, namespace string) (*corev1.Namespace, error) {
+	client, ctx, log, err := GetOrCreateOCClient(kubeconfig)
 	if err != nil {
 		return nil, err
 	}
-	ctx := context.TODO()
 	ns := &corev1.Namespace{}
 	err = client.Get(ctx, occlient.ObjectKey{Name: namespace}, ns)
 	if err != nil {
@@ -94,28 +93,23 @@ func CreateNamespaceIfNotExists(kubeconfig, namespace string, out io.Writer) (*c
 			if err := client.Create(ctx, newNamespace); err != nil {
 				return nil, err
 			}
-			fmt.Fprintf(out, "Namespace %s created. \n", namespace)
+			log.Info("Namespace %s created. \n", namespace)
 			return newNamespace, nil
 		}
 		return nil, err
 	}
-	fmt.Fprintf(out, "Namespace %s exists\n", namespace)
+	log.Info("Namespace %s exists\n", namespace)
 	return ns, nil
 }
 
 // ConfigureAdditionalCA configures additional CA in the openshift cluster, it will lead to rolling out and wait until all MachineConfigPools finish updating.
 // If the trusted ca bundle has been set, it will update that ConfigMap and it will roll out.
 // When this method returns, the additional CA has been set up in all nodes
-func ConfigureAdditionalCA(kubeconfig, caCertFile string, verbose bool, out io.Writer) error {
-	if out == nil {
-		out = io.Discard
-	}
-	client, err := GetOrCreateOCClient(kubeconfig)
+func ConfigureAdditionalCA(kubeconfig, caCertFile string, verbose bool) error {
+	client, ctx, log, err := GetOrCreateOCClient(kubeconfig)
 	if err != nil {
 		return err
 	}
-	ctx := context.TODO()
-
 	proxy := &configv1.Proxy{}
 	if err = client.Get(ctx, occlient.ObjectKey{Name: "cluster"}, proxy); err != nil {
 		return err
@@ -142,12 +136,14 @@ func ConfigureAdditionalCA(kubeconfig, caCertFile string, verbose bool, out io.W
 			return err
 		}
 		if !alreadyAdd {
+			log.Info("Updating existing trusted CA config map %s\n", existing.Name)
 			cm.Data["ca-bundle.crt"] = existingBundle + "\n" + caCert
 			if err := client.Update(ctx, cm); err != nil {
 				return err
 			}
 			shouldRolling = true
 		} else {
+			log.Info("The CA certificate is already in the existing trusted CA config map %s, no need to update\n", existing.Name)
 			shouldRolling = false
 		}
 	} else {
@@ -210,16 +206,12 @@ func ConfigureAdditionalCA(kubeconfig, caCertFile string, verbose bool, out io.W
 
 // CreateTLSSecretIfNotExists tries to create a TLS secret from tlsKeyFile and tlsCertFile.
 // If the secret with name: secretName exists already, it fails.
-func CreateTLSSecretIfNotExists(kubeconfig, namespace, secretName, tlsKeyFile, tlsCertFile string, out io.Writer) (*corev1.Secret, error) {
-	if out == nil {
-		out = io.Discard
-	}
-	client, err := GetOrCreateOCClient(kubeconfig)
+func CreateTLSSecretIfNotExists(kubeconfig, namespace, secretName, tlsKeyFile, tlsCertFile string) (*corev1.Secret, error) {
+	client, ctx, log, err := GetOrCreateOCClient(kubeconfig)
 	if err != nil {
 		return nil, err
 	}
-	ctx := context.TODO()
-	ns, err := CreateNamespaceIfNotExists(kubeconfig, namespace, out)
+	ns, err := CreateNamespaceIfNotExists(kubeconfig, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -255,21 +247,17 @@ func CreateTLSSecretIfNotExists(kubeconfig, namespace, secretName, tlsKeyFile, t
 	if err := client.Create(ctx, secret); err != nil {
 		return nil, err
 	}
-	fmt.Fprintf(out, "TLS secret %s created in namespace %s\n", secretName, namespace)
+	log.Info("TLS secret %s created in namespace %s\n", secretName, namespace)
 	return secret, nil
 }
 
 // CreateHTPasswdSecret creates a htpasswd style user+Bcrypt(hash(password))
-func CreateHTPasswdSecret(kubeconfig, namespace, secretName, user, password string, out io.Writer) (*corev1.Secret, error) {
-	if out == nil {
-		out = io.Discard
-	}
-	client, err := GetOrCreateOCClient(kubeconfig)
+func CreateHTPasswdSecret(kubeconfig, namespace, secretName, user, password string) (*corev1.Secret, error) {
+	client, ctx, log, err := GetOrCreateOCClient(kubeconfig)
 	if err != nil {
 		return nil, err
 	}
-	ctx := context.TODO()
-	ns, err := CreateNamespaceIfNotExists(kubeconfig, namespace, out)
+	ns, err := CreateNamespaceIfNotExists(kubeconfig, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -299,17 +287,16 @@ func CreateHTPasswdSecret(kubeconfig, namespace, secretName, user, password stri
 	if err := client.Create(ctx, secret); err != nil {
 		return nil, err
 	}
-	fmt.Fprintf(out, "Htpasswd secret %s created in namespace %s\n", secretName, ns.Name)
+	log.Info("Htpasswd secret %s created in namespace %s\n", secretName, ns.Name)
 	return secret, nil
 }
 
 // BaseDomain returns the cluster name, the base domain name if succeeds
 func BaseDomain(kubeconfig string) (string, string, error) {
-	client, err := GetOrCreateOCClient(kubeconfig)
+	client, ctx, _, err := GetOrCreateOCClient(kubeconfig)
 	if err != nil {
 		return "", "", err
 	}
-	ctx := context.TODO()
 	ingress := &configv1.Ingress{}
 	if err := client.Get(ctx, occlient.ObjectKey{Name: "cluster"}, ingress); err != nil {
 		return "", "", fmt.Errorf("failed to get ingress/cluster: %w", err)

@@ -1,6 +1,8 @@
 package core
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 )
@@ -32,13 +34,13 @@ func NewCobraDocGenCmd(rootCmd *cobra.Command) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&opts.Output, "output", opts.Output, "The CA certificate subject used to generate the TLS CA.")
 	cmd.MarkFlagRequired("output")
-	cmd.Run = func(cmd *cobra.Command, args []string) {
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		err := doc.GenMarkdownTree(rootCmd, opts.Output)
 		if err != nil {
-			cmd.Printf("Failed to generate the documentation: %s\n", err)
-			panic(err)
+			return fmt.Errorf("Failed to generate the documentation: %v\n", err)
 		}
 		cmd.Printf("The documentation is generated to %s\n", opts.Output)
+		return nil
 	}
 	return cmd
 }

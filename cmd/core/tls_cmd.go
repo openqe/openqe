@@ -1,7 +1,7 @@
 package core
 
 import (
-	"os"
+	"fmt"
 
 	"github.com/openqe/openqe/pkg/tls"
 	"github.com/spf13/cobra"
@@ -41,12 +41,12 @@ func NewCAGenCommand() *cobra.Command {
 
 	opts := tls.DefaultCAOptions()
 	BindCAOptions(opts, cmd.Flags())
-	cmd.Run = func(cmd *cobra.Command, args []string) {
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if err := tls.GenerateCAToFiles(opts); err != nil {
-			cmd.Printf("Failed to generate the CA key/cert pair: %s\n", err)
-			return
+			return fmt.Errorf("Failed to generate the CA key/cert pair: %v\n", err)
 		}
 		cmd.Printf("CA generated to caKeyFile: %s, caCertFile: %s\n", opts.CaKeyFile, opts.CaCertFile)
+		return nil
 	}
 	return cmd
 }
@@ -74,12 +74,12 @@ You can use the 'tls ca-gen' command to generate a CA key/cert pair for testing 
 
 	opts := tls.DefaultPKIOptions()
 	BindPKIOptions(opts, cmd.Flags())
-	cmd.Run = func(cmd *cobra.Command, args []string) {
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if err := tls.GenerateTLSKeyCertPairToFiles(opts); err != nil {
-			cmd.Printf("Failed to generate the TLS key/cert pair: %s\n", err)
-			return
+			return fmt.Errorf("Failed to generate the TLS key/cert pair: %s\n", err)
 		}
 		cmd.Printf("TLS key/cert paris gets generated to keyFile: %s, certFile: %s\n", opts.KeyFile, opts.CertFile)
+		return nil
 	}
 	return cmd
 }
@@ -108,31 +108,27 @@ or failure (exit code 1) if it is not found.`,
 	cmd.Flags().StringVar(&opts.CACertFile, "ca-cert-file", opts.CACertFile, "The CA certificate file to check")
 	cmd.Flags().StringVar(&opts.CABundleFile, "ca-bundle-file", opts.CABundleFile, "The CA bundle file to check against")
 
-	cmd.Run = func(cmd *cobra.Command, args []string) {
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if opts.CACertFile == "" {
-			cmd.Printf("Error: --ca-cert-file is required\n")
 			cmd.Usage()
-			return
+			return fmt.Errorf("Error: --ca-cert-file is required\n")
 		}
 		if opts.CABundleFile == "" {
-			cmd.Printf("Error: --ca-bundle-file is required\n")
 			cmd.Usage()
-			return
+			return fmt.Errorf("Error: --ca-bundle-file is required\n")
 		}
 
 		found, err := tls.CheckCACertInBundle(opts.CACertFile, opts.CABundleFile)
 		if err != nil {
-			cmd.Printf("Error checking CA certificate in bundle: %s\n", err)
-			return
+			return fmt.Errorf("Error checking CA certificate in bundle: %v\n", err)
 		}
 
 		if found {
 			cmd.Printf("CA certificate found in bundle\n")
 		} else {
-			cmd.Printf("CA certificate NOT found in bundle\n")
-			// Exit with error code to indicate failure
-			os.Exit(1)
+			return fmt.Errorf("CA certificate NOT found in bundle\n")
 		}
+		return nil
 	}
 	return cmd
 }

@@ -1,6 +1,8 @@
 package openshift
 
 import (
+	"fmt"
+
 	"github.com/openqe/openqe/pkg/openshift"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -53,18 +55,20 @@ func UpsertDockerPullSecretCommand() *cobra.Command {
 		Namespace: "default",
 	}
 	BindUpsertDockerPullSecretOptions(opts, cmd.Flags())
-	cmd.Run = func(cmd *cobra.Command, args []string) {
+	// Mark required flags
+	cmd.MarkFlagRequired("secret-name")
+	cmd.MarkFlagRequired("namespace")
+	cmd.MarkFlagRequired("auth")
+
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if opts.SecretName == "" {
-			cmd.Printf("Error: --secret-name is required\n")
-			return
+			return fmt.Errorf("--secret-name is required")
 		}
 		if opts.Namespace == "" {
-			cmd.Printf("Error: --namespace is required\n")
-			return
+			return fmt.Errorf("--namespace is required")
 		}
 		if opts.Auths == nil || len(opts.Auths) == 0 {
-			cmd.Printf("Error: at least one --auth is required\n")
-			return
+			return fmt.Errorf("at least one --auth is required")
 		}
 
 		dockerPullSecretOpts := openshift.DefaultDockerPullSecretOptions()
@@ -74,15 +78,14 @@ func UpsertDockerPullSecretCommand() *cobra.Command {
 		dockerPullSecretOpts.Verbose = opts.Verbose
 		dockerCfg, err := openshift.NewDockerConfig(opts.Auths)
 		if err != nil {
-			cmd.Printf("Failed to create Docker Config: %s\n", err)
-			return
+			return fmt.Errorf("failed to create Docker Config: %s", err)
 		}
 		dockerPullSecretOpts.DockerCfg = dockerCfg
-		_, err = openshift.UpsertDockerPullSecret(dockerPullSecretOpts, cmd.OutOrStdout())
+		_, err = openshift.UpsertDockerPullSecret(dockerPullSecretOpts)
 		if err != nil {
-			cmd.Printf("Failed to create or update Docker pull secret: %s\n", err)
-			return
+			return fmt.Errorf("failed to create or update Docker pull secret: %s", err)
 		}
+		return nil
 	}
 	return cmd
 }
@@ -111,26 +114,28 @@ func NewValidateDockerPullSecretCommand() *cobra.Command {
 	flags.StringVar(&opts.pullSecretFile, "pull-secret-file", opts.pullSecretFile, "The pull secret file where to configure the authentication")
 	flags.BoolVar(&opts.verbose, "verbose", opts.verbose, "If more information should be printed during the operation")
 
-	cmd.Run = func(cmd *cobra.Command, args []string) {
+	// Mark required flags
+	cmd.MarkFlagRequired("pull-secret-file")
+	cmd.MarkFlagRequired("registry-url")
+
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if opts.pullSecretFile == "" {
-			cmd.Printf("Error: --pull-secret-file is required\n")
-			return
+			return fmt.Errorf("--pull-secret-file is required")
 		}
 		if opts.registryURL == "" {
-			cmd.Printf("Error: --registry-url is required\n")
-			return
+			return fmt.Errorf("--registry-url is required")
 		}
 		valid, err := openshift.ValidateDockerPullSecret(opts.ocpOpts.KUBECONFIG, opts.registryURL, opts.pullSecretFile, opts.verbose)
 		if err != nil {
-			cmd.Printf("Failed to validate Docker pull secret: %s\n", err)
-			return
+			return fmt.Errorf("failed to validate Docker pull secret: %w", err)
 		}
-
 		if valid {
 			cmd.Printf("Pull secret file: %s is valid for registry %s\n", opts.pullSecretFile, opts.registryURL)
 		} else {
 			cmd.Printf("Pull secret file: %s is NOT valid for registry %s\n", opts.pullSecretFile, opts.registryURL)
+			return fmt.Errorf("pull secret validation failed")
 		}
+		return nil
 	}
 	return cmd
 }

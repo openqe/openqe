@@ -1,6 +1,8 @@
 package openshift
 
 import (
+	"fmt"
+
 	"github.com/openqe/openqe/cmd/core"
 	"github.com/openqe/openqe/pkg/openshift"
 	"github.com/spf13/cobra"
@@ -27,13 +29,13 @@ func NewImageRegistryCommand() *cobra.Command {
 
 	opts := openshift.DefaultImageRegistryOptions()
 	BindImageRegistryOptions(opts, cmd.Flags())
-	cmd.Run = func(cmd *cobra.Command, args []string) {
-		route, err := openshift.SetupImageRegistry(opts, cmd.OutOrStdout())
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		route, err := openshift.SetupImageRegistry(opts)
 		if err != nil {
-			cmd.Printf("Failed to create the image registry: %s\n", err)
-		} else {
-			cmd.Printf("Image registry: %s was created.\n", route)
+			return fmt.Errorf("Failed to create the image registry: %v\n", err)
 		}
+		cmd.Printf("Image registry: %s was created.\n", route)
+		return nil
 	}
 	return cmd
 }

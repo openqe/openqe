@@ -26,7 +26,9 @@ func (c *CLI) Execute() (string, error) {
 		fmt.Printf("DEBUG: %s\n", c.String())
 	}
 	cmd := exec.Command(c.ExecPath, c.Args...)
-	cmd.Stdin = c.Stdin
+	if c.Stdin != nil {
+		cmd.Stdin = c.Stdin
+	}
 	out, err := cmd.CombinedOutput()
 	trimmed := strings.TrimSpace(string(out))
 	switch err.(type) {

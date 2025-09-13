@@ -1,10 +1,8 @@
 package openshift
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/openqe/openqe/pkg/exec"
@@ -18,20 +16,16 @@ import (
 // UpsertDockerPullSecret creates or update a Docker pull secret in a namespace with Auths specified
 // If the secret does not exist, it creates one with the auths specified
 // If the secret exists already, it updates with the auths specified
-func UpsertDockerPullSecret(opts *DockerPullSecretOptions, out io.Writer) (*corev1.Secret, error) {
-	if out == nil {
-		out = io.Discard
-	}
+func UpsertDockerPullSecret(opts *DockerPullSecretOptions) (*corev1.Secret, error) {
 
 	kubeconfig := opts.OcpOpts.KUBECONFIG
-	client, err := GetOrCreateOCClient(kubeconfig)
+	client, ctx, log, err := GetOrCreateOCClient(kubeconfig)
 	if err != nil {
 		return nil, err
 	}
-	ctx := context.TODO()
 
 	// Create namespace if it doesn't exist
-	ns, err := CreateNamespaceIfNotExists(kubeconfig, opts.Namespace, out)
+	ns, err := CreateNamespaceIfNotExists(kubeconfig, opts.Namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -83,18 +77,16 @@ func UpsertDockerPullSecret(opts *DockerPullSecretOptions, out io.Writer) (*core
 	if err := client.Create(ctx, secret); err != nil {
 		return nil, err
 	}
-	fmt.Fprintf(out, "Docker pull secret %s created in namespace %s\n", opts.SecretName, ns.Name)
+	log.Info("Docker pull secret %s created in namespace %s\n", opts.SecretName, ns.Name)
 	return secret, nil
 }
 
 // CheckDockerPullSecretExists checks if a Docker pull secret exists in a namespace
 func CheckDockerPullSecretExists(kubeconfig, namespace, secretName string) (bool, error) {
-	client, err := GetOrCreateOCClient(kubeconfig)
+	client, ctx, _, err := GetOrCreateOCClient(kubeconfig)
 	if err != nil {
 		return false, err
 	}
-
-	ctx := context.TODO()
 
 	secret := &corev1.Secret{}
 	err = client.Get(ctx, occlient.ObjectKey{Name: secretName, Namespace: namespace}, secret)
@@ -109,24 +101,18 @@ func CheckDockerPullSecretExists(kubeconfig, namespace, secretName string) (bool
 }
 
 // DeleteDockerPullSecret deletes a Docker pull secret
-func DeleteDockerPullSecret(kubeconfig, namespace, secretName string, out io.Writer) error {
-	if out == nil {
-		out = io.Discard
-	}
-
-	client, err := GetOrCreateOCClient(kubeconfig)
+func DeleteDockerPullSecret(kubeconfig, namespace, secretName string) error {
+	client, ctx, log, err := GetOrCreateOCClient(kubeconfig)
 	if err != nil {
 		return err
 	}
-
-	ctx := context.TODO()
 
 	// Check if secret exists
 	secret := &corev1.Secret{}
 	err = client.Get(ctx, occlient.ObjectKey{Name: secretName, Namespace: namespace}, secret)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			fmt.Fprintf(out, "Docker pull secret %s does not exist in the namespace %s\n", secretName, namespace)
+			log.Info("Docker pull secret %s does not exist in the namespace %s\n", secretName, namespace)
 			return nil
 		}
 		return err
@@ -136,7 +122,7 @@ func DeleteDockerPullSecret(kubeconfig, namespace, secretName string, out io.Wri
 	if err := client.Delete(ctx, secret); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Docker pull secret %s deleted from namespace %s\n", secretName, namespace)
+	log.Info("Docker pull secret %s deleted from namespace %s\n", secretName, namespace)
 	return nil
 }
 

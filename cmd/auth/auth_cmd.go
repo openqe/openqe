@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"fmt"
+
 	"github.com/openqe/openqe/pkg/auth"
 	"github.com/spf13/cobra"
 )
@@ -36,13 +38,13 @@ func NewHtpasswdCommand() *cobra.Command {
 	cmd.Flags().StringVar(&opts.password, "password", opts.password, "The password")
 	cmd.MarkFlagRequired("username")
 	cmd.MarkFlagRequired("password")
-	cmd.Run = func(cmd *cobra.Command, args []string) {
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		auth, err := auth.GenerateHtpasswdBcrypt(opts.username, opts.password)
 		if err != nil {
-			cmd.Printf("Failed to generate the auth credentials: %s\n", err)
-			return
+			return fmt.Errorf("Failed to generate the auth credentials: %w\n", err)
 		}
 		cmd.Printf("%s\n", auth)
+		return nil
 	}
 	return cmd
 }
