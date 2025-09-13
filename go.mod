@@ -1,4 +1,4 @@
-module github.com/gaol/openqe
+module github.com/openqe/openqe
 
 go 1.24.4
 

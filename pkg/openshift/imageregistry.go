@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/gaol/openqe/pkg/tls"
-	"github.com/gaol/openqe/pkg/utils"
+	"github.com/openqe/openqe/pkg/tls"
+	"github.com/openqe/openqe/pkg/utils"
 	routev1 "github.com/openshift/api/route/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"

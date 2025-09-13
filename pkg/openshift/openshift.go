@@ -13,9 +13,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	occlient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/gaol/openqe/pkg/auth"
-	"github.com/gaol/openqe/pkg/tls"
-	"github.com/gaol/openqe/pkg/utils"
+	"github.com/openqe/openqe/pkg/auth"
+	"github.com/openqe/openqe/pkg/tls"
+	"github.com/openqe/openqe/pkg/utils"
 	configv1 "github.com/openshift/api/config/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	appsv1 "k8s.io/api/apps/v1"

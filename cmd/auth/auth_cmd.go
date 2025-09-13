@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"github.com/gaol/openqe/pkg/auth"
+	"github.com/openqe/openqe/pkg/auth"
 	"github.com/spf13/cobra"
 )
 

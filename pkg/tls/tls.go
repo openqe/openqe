@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gaol/openqe/pkg/utils"
+	"github.com/openqe/openqe/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 )
 

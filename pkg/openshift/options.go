@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gaol/openqe/pkg/tls"
-	"github.com/gaol/openqe/pkg/utils"
+	"github.com/openqe/openqe/pkg/tls"
+	"github.com/openqe/openqe/pkg/utils"
 	"k8s.io/apimachinery/pkg/util/errors"
 )
 

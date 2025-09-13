@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/gaol/openqe/pkg/utils"
+	"github.com/openqe/openqe/pkg/utils"
 )
 
 type CLI struct {

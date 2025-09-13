@@ -15,9 +15,9 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/yaml"
 
-	"github.com/gaol/openqe/cmd/auth"
-	core "github.com/gaol/openqe/cmd/core"
-	"github.com/gaol/openqe/cmd/openshift"
+	"github.com/openqe/openqe/cmd/auth"
+	core "github.com/openqe/openqe/cmd/core"
+	"github.com/openqe/openqe/cmd/openshift"
 	"github.com/spf13/cobra"
 )
 

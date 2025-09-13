@@ -3,7 +3,7 @@ package core
 import (
 	"os"
 
-	"github.com/gaol/openqe/pkg/tls"
+	"github.com/openqe/openqe/pkg/tls"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 )

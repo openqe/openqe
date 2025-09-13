@@ -1,7 +1,7 @@
 package openshift
 
 import (
-	"github.com/gaol/openqe/pkg/openshift"
+	"github.com/openqe/openqe/pkg/openshift"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 )
