@@ -18,6 +18,7 @@ import (
 	"github.com/openqe/openqe/cmd/auth"
 	core "github.com/openqe/openqe/cmd/core"
 	"github.com/openqe/openqe/cmd/openshift"
+	"github.com/openqe/openqe/cmd/polarion"
 	"github.com/spf13/cobra"
 )
 
@@ -76,6 +77,7 @@ func addCommands(rootCommand *cobra.Command) {
 	rootCommand.AddCommand(core.NewTLSCommand())
 	rootCommand.AddCommand(openshift.NewCommand())
 	rootCommand.AddCommand(auth.NewAuthCommand())
+	rootCommand.AddCommand(polarion.NewCommand())
 	rootCommand.AddCommand(core.NewDocCommand(rootCommand))
 }
 
