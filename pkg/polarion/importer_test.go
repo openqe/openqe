@@ -81,12 +81,12 @@ func TestSnakeToCamel(t *testing.T) {
 
 func TestBuildWorkItemPayload(t *testing.T) {
 	tests := []struct {
-		name             string
-		testCase         *TestCase
-		defaults         map[string]interface{}
-		workItemType     string
-		expectedAttrs    map[string]interface{}
-		unexpectedAttrs  []string
+		name            string
+		testCase        *TestCase
+		defaults        map[string]interface{}
+		workItemType    string
+		expectedAttrs   map[string]interface{}
+		unexpectedAttrs []string
 	}{
 		{
 			name: "basic test case with no defaults",
@@ -205,8 +205,8 @@ func TestBuildWorkItemPayload(t *testing.T) {
 				"type":           "testcase",
 				"title":          "Test override",
 				"caseID":         "TEST-005",
-				"priority":       "critical", // overridden
-				"caseAutomation": "fully-automated", // overridden by custom attribute
+				"priority":       "critical",            // overridden
+				"caseAutomation": "fully-automated",     // overridden by custom attribute
 				"assignee":       "default@example.com", // from defaults
 			},
 			unexpectedAttrs: []string{},
@@ -219,8 +219,8 @@ func TestBuildWorkItemPayload(t *testing.T) {
 				Description: "Test snake_case in defaults",
 			},
 			defaults: map[string]interface{}{
-				"custom_field_one":   "value1",
-				"custom_field_two":   "value2",
+				"custom_field_one":     "value1",
+				"custom_field_two":     "value2",
 				"very_long_field_name": "value3",
 			},
 			workItemType: "testcase",
