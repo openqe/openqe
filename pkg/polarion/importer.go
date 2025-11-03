@@ -487,11 +487,14 @@ func (i *Importer) buildTestStepsPayload(steps []TestStep) *TestStepsPayload {
 	var data []TestStepData
 
 	for _, step := range steps {
-		// Build step content from description
+		// Build step content from description - simple paragraph
 		stepContent := fmt.Sprintf("<p>%s</p>", escapeHTML(step.Description))
 
-		// Build expected result
-		expectedContent := fmt.Sprintf("<p>%s</p>", escapeHTML(step.Expected))
+		// Build expected result - preserve formatting for code/commands
+		// Use <pre> with polarion-rte-code class to preserve whitespace and line breaks
+		expectedContent := fmt.Sprintf(
+			`<pre class="polarion-rte-code" style="white-space: pre-wrap;">%s</pre>`,
+			escapeHTML(step.Expected))
 
 		// Create test step data with the format specified by the user
 		stepData := TestStepData{
