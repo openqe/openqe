@@ -96,6 +96,42 @@ func (c *Client) TestConnection() error {
 	return fmt.Errorf("connection test failed with status %d: %s", resp.StatusCode, string(bodyBytes))
 }
 
+// GetWorkItem retrieves a work item from Polarion by ID
+func (c *Client) GetWorkItem(workItemID string) (*WorkItemResponseData, error) {
+	url := fmt.Sprintf("%s/projects/%s/workitems/%s", c.baseURL, c.config.Polarion.ProjectID, workItemID)
+
+	resp, err := c.doRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get work item: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// If not found, return nil without error (so caller can handle it)
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get work item (status %d): %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var responseContent map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &responseContent); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	data, _ := json.Marshal(responseContent["data"])
+	var result WorkItemResponseData
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse data from response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // CreateWorkItem creates a work item in Polarion (without test steps)
 func (c *Client) CreateWorkItem(payload *WorkItemPayload) (*WorkItemResponse, error) {
 	url := fmt.Sprintf("%s/projects/%s/workitems", c.baseURL, c.config.Polarion.ProjectID)
@@ -121,6 +157,87 @@ func (c *Client) CreateWorkItem(payload *WorkItemPayload) (*WorkItemResponse, er
 	}
 
 	return &result, nil
+}
+
+// GetTestSteps retrieves test steps for a work item
+func (c *Client) GetTestSteps(workItemID string) (*TestStepsResponse, error) {
+	url := fmt.Sprintf("%s/projects/%s/workitems/%s/teststeps",
+		c.baseURL, c.config.Polarion.ProjectID, workItemID)
+
+	resp, err := c.doRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get test steps: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// If not found, return empty response
+	if resp.StatusCode == http.StatusNotFound {
+		return &TestStepsResponse{Data: []TestStepData{}}, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get test steps (status %d): %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result TestStepsResponse
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteTestSteps deletes test steps from a work item
+// If existingSteps is provided, it will delete those specific steps
+// If existingSteps is nil or empty, it will try to delete without a body (may not work per API spec)
+func (c *Client) DeleteTestSteps(workItemID string, existingSteps *TestStepsResponse) error {
+	url := fmt.Sprintf("%s/projects/%s/workitems/%s/teststeps",
+		c.baseURL, c.config.Polarion.ProjectID, workItemID)
+
+	var payload *TestStepsDeletePayload
+
+	// Build delete payload from existing steps if provided
+	if existingSteps != nil && len(existingSteps.Data) > 0 {
+		deleteData := make([]TestStepDeleteData, 0, len(existingSteps.Data))
+		for _, step := range existingSteps.Data {
+			if step.ID != "" {
+				deleteData = append(deleteData, TestStepDeleteData{
+					Type: "teststeps",
+					ID:   step.ID,
+				})
+			}
+		}
+
+		if len(deleteData) > 0 {
+			payload = &TestStepsDeletePayload{
+				Data: deleteData,
+			}
+			c.logger.Printf("Deleting %d test steps with IDs\n", len(deleteData))
+		}
+	}
+
+	resp, err := c.doRequest("DELETE", url, payload)
+	if err != nil {
+		return fmt.Errorf("failed to delete test steps: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Accept both OK and No Content as success
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("failed to delete test steps (status %d): %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
 }
 
 // AddTestSteps adds test steps to an existing work item

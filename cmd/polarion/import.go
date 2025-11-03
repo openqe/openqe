@@ -13,6 +13,7 @@ type ImportOptions struct {
 	DryRun         bool
 	Verbose        bool
 	TestConnection bool
+	AutoConfirm    bool
 }
 
 func NewImportCommand() *cobra.Command {
@@ -38,6 +39,10 @@ Examples:
 
   # Test connection only
   openqe polarion import --test-connection
+
+  # Auto-confirm all prompts (useful for batch operations)
+  openqe polarion import --yes
+  openqe polarion import -y
 `,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -51,6 +56,11 @@ Examples:
 			// Override test cases file if provided
 			if opts.TestCasesFile != "" {
 				importer.SetTestCasesFile(opts.TestCasesFile)
+			}
+
+			// Set auto-confirm flag
+			if opts.AutoConfirm {
+				importer.SetAutoConfirm(true)
 			}
 
 			// Test connection only
@@ -68,6 +78,7 @@ Examples:
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Perform a dry run without actually creating test cases")
 	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "Enable verbose logging")
 	cmd.Flags().BoolVar(&opts.TestConnection, "test-connection", false, "Only test the connection to Polarion server")
+	cmd.Flags().BoolVarP(&opts.AutoConfirm, "yes", "y", false, "Automatically confirm all prompts (useful for batch operations)")
 
 	return cmd
 }

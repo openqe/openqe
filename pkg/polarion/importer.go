@@ -1,6 +1,7 @@
 package polarion
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -15,6 +16,7 @@ type Importer struct {
 	client        *Client
 	logger        *log.Logger
 	testCasesFile string
+	autoConfirm   bool
 }
 
 // NewImporter creates a new Polarion importer
@@ -55,6 +57,11 @@ func NewImporter(configFile string, verbose bool) (*Importer, error) {
 // SetTestCasesFile sets the test cases file path
 func (i *Importer) SetTestCasesFile(file string) {
 	i.testCasesFile = file
+}
+
+// SetAutoConfirm sets whether to automatically confirm prompts
+func (i *Importer) SetAutoConfirm(autoConfirm bool) {
+	i.autoConfirm = autoConfirm
 }
 
 // TestConnection tests the connection to Polarion
@@ -112,12 +119,11 @@ func (i *Importer) ImportAll(dryRun bool) error {
 
 // createTestCase creates a single test case in Polarion
 func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) error {
-	i.logger.Printf("Creating test case: %s - %s\n", testCase.ID, testCase.Title)
-
-	// Build work item payload (without test steps)
-	workItemPayload := i.buildWorkItemPayload(testCase)
+	i.logger.Printf("Processing test case: %s - %s\n", testCase.ID, testCase.Title)
 
 	if dryRun {
+		// Build work item payload (without test steps)
+		workItemPayload := i.buildWorkItemPayload(testCase)
 		i.logger.Println("DRY RUN: Would create test case with payload:")
 		payloadJSON, _ := json.MarshalIndent(workItemPayload, "", "  ")
 		fmt.Println(string(payloadJSON))
@@ -133,26 +139,101 @@ func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) error {
 		return nil
 	}
 
-	// Create work item
-	response, err := i.client.CreateWorkItem(workItemPayload)
+	// Check if work item already exists
+	i.logger.Printf("Checking if work item %s already exists...\n", testCase.ID)
+	existingWorkItemData, err := i.client.GetWorkItem(testCase.ID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to check if work item exists: %w", err)
 	}
 
-	if len(response.Data) == 0 {
-		return fmt.Errorf("no work item returned in response")
-	}
+	var workItemID string
+	var workItemCreated bool
 
-	workItemID := response.Data[0].ID
-	i.logger.Printf("✓ Successfully created work item: %s (ID: %s)\n", testCase.ID, workItemID)
+	if existingWorkItemData != nil {
+		// Work item already exists
+		workItemID = existingWorkItemData.ID
+		i.logger.Printf("⚠ Work item already exists: %s (ID: %s). Skipping creation.\n", testCase.ID, workItemID)
+		workItemCreated = false
+	} else {
+		// Work item doesn't exist, create it
+		i.logger.Printf("Work item does not exist. Creating new work item...\n")
+
+		// Build work item payload (without test steps)
+		workItemPayload := i.buildWorkItemPayload(testCase)
+
+		// Create work item
+		response, err := i.client.CreateWorkItem(workItemPayload)
+		if err != nil {
+			return err
+		}
+
+		if len(response.Data) == 0 {
+			return fmt.Errorf("no work item returned in response")
+		}
+
+		workItemID = response.Data[0].ID
+		i.logger.Printf("✓ Successfully created work item: %s (ID: %s)\n", testCase.ID, workItemID)
+		workItemCreated = true
+	}
 
 	// Add test steps if present
 	if len(testCase.Steps) > 0 {
-		testStepsPayload := i.buildTestStepsPayload(testCase.Steps)
 		// Extract just the ID part (e.g., "OCP-85835" from "OSE/OCP-85835")
 		workItemIDOnly := extractWorkItemID(workItemID)
+
+		// Check if test steps already exist
+		i.logger.Printf("Checking for existing test steps...\n")
+		existingSteps, err := i.client.GetTestSteps(workItemIDOnly)
+		if err != nil {
+			return fmt.Errorf("failed to check existing test steps: %w", err)
+		}
+
+		// Handle existing test steps
+		if existingSteps != nil && len(existingSteps.Data) > 0 {
+			i.logger.Printf("Found %d existing test steps.\n", len(existingSteps.Data))
+
+			// Check if we should skip confirmation
+			shouldDelete := i.autoConfirm
+			if !i.autoConfirm {
+				// Ask user for confirmation before deleting
+				confirmMsg := fmt.Sprintf("⚠ Existing test steps will be deleted and replaced. Continue?")
+				shouldDelete = confirmAction(confirmMsg)
+			} else {
+				i.logger.Printf("Auto-confirm enabled - proceeding with deletion\n")
+			}
+
+			if !shouldDelete {
+				// User declined - print existing steps and skip recreation
+				fmt.Println("\nℹ Skipping test steps update. Showing existing test steps:")
+				i.printExistingTestSteps(existingSteps)
+				i.logger.Printf("✓ Work item processed (test steps unchanged)\n")
+				return nil
+			}
+
+			// User confirmed (or auto-confirmed) - proceed with deletion
+			i.logger.Printf("Deleting existing test steps...\n")
+			if err := i.client.DeleteTestSteps(workItemIDOnly, existingSteps); err != nil {
+				return fmt.Errorf("failed to delete existing test steps: %w", err)
+			}
+			i.logger.Printf("✓ Successfully deleted existing test steps\n")
+		} else {
+			i.logger.Printf("No existing test steps found\n")
+		}
+
+		// Add new test steps
+		testStepsPayload := i.buildTestStepsPayload(testCase.Steps)
+
+		if workItemCreated {
+			i.logger.Printf("Adding %d test steps to newly created work item...\n", len(testCase.Steps))
+		} else {
+			i.logger.Printf("Adding %d test steps to existing work item...\n", len(testCase.Steps))
+		}
+
 		if err := i.client.AddTestSteps(workItemIDOnly, testStepsPayload); err != nil {
-			return fmt.Errorf("work item created but failed to add test steps: %w", err)
+			if workItemCreated {
+				return fmt.Errorf("work item created but failed to add test steps: %w", err)
+			}
+			return fmt.Errorf("failed to add test steps to existing work item: %w", err)
 		}
 		i.logger.Printf("✓ Successfully added %d test steps\n", len(testCase.Steps))
 	}
@@ -329,4 +410,51 @@ func extractWorkItemID(fullID string) string {
 	}
 	// Otherwise return the full ID as is
 	return fullID
+}
+
+// confirmAction prompts the user for confirmation
+func confirmAction(message string) bool {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Printf("%s (y/N): ", message)
+
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return false
+	}
+
+	response = strings.TrimSpace(strings.ToLower(response))
+	return response == "y" || response == "yes"
+}
+
+// printExistingTestSteps prints the existing test steps in a readable format
+func (i *Importer) printExistingTestSteps(steps *TestStepsResponse) {
+	if steps == nil || len(steps.Data) == 0 {
+		fmt.Println("No test steps to display")
+		return
+	}
+
+	fmt.Println("\n" + strings.Repeat("=", 60))
+	fmt.Printf("Existing Test Steps (%d total):\n", len(steps.Data))
+	fmt.Println(strings.Repeat("=", 60))
+
+	for idx, step := range steps.Data {
+		fmt.Printf("\nStep %d:\n", idx+1)
+
+		// Extract step description and expected result from values
+		if len(step.Attributes.Values) >= 2 {
+			// Values are typically [step, expectedResult]
+			if stepContent, ok := step.Attributes.Values[0].(map[string]interface{}); ok {
+				if value, ok := stepContent["value"].(string); ok {
+					fmt.Printf("  Description: %s\n", value)
+				}
+			}
+			if expectedContent, ok := step.Attributes.Values[1].(map[string]interface{}); ok {
+				if value, ok := expectedContent["value"].(string); ok {
+					fmt.Printf("  Expected:    %s\n", value)
+				}
+			}
+		}
+	}
+
+	fmt.Println(strings.Repeat("=", 60) + "\n")
 }

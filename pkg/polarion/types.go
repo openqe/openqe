@@ -78,10 +78,27 @@ type TestStepsPayload struct {
 	Data []TestStepData `json:"data"`
 }
 
+// TestStepsResponse represents the response from getting test steps
+type TestStepsResponse struct {
+	Data []TestStepData `json:"data"`
+}
+
+// TestStepsDeletePayload represents the payload for deleting test steps
+type TestStepsDeletePayload struct {
+	Data []TestStepDeleteData `json:"data"`
+}
+
+// TestStepDeleteData represents a single test step to delete
+type TestStepDeleteData struct {
+	Type string `json:"type"`
+	ID   string `json:"id"`
+}
+
 // TestStepData represents a single test step in the payload
 type TestStepData struct {
 	Type       string             `json:"type"`
-	Attributes TestStepAttributes `json:"attributes"`
+	ID         string             `json:"id,omitempty"`
+	Attributes TestStepAttributes `json:"attributes,omitempty"`
 }
 
 // TestStepAttributes represents test step attributes
