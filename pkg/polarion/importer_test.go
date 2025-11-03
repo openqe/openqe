@@ -321,7 +321,7 @@ func TestExtractWorkItemID(t *testing.T) {
 	}{
 		{
 			name:     "Full ID with project prefix",
-			input:    "OSE/OCP-85835",
+			input:    "PRJ/OCP-85835",
 			expected: "OCP-85835",
 		},
 		{
