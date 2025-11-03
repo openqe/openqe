@@ -14,26 +14,37 @@ type TemplateRenderer struct {
 	context pongo2.Context
 }
 
-// keyringFunc is a callable function for pongo2 templates that retrieves secrets from keyring
-type keyringFunc struct{}
+func init() {
+	// Register keyring as a global function in pongo2
+	pongo2.RegisterFilter("keyring", keyringFilter)
+}
 
-// Call implements the pongo2 callable interface for keyring function
-func (k keyringFunc) Call(args ...interface{}) (interface{}, error) {
+// keyringFilter is a pongo2 filter that retrieves secrets from keyring
+func keyringFilter(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
 	serviceName := "polarion"
 	secretName := "api_key"
 
-	if len(args) > 0 {
-		if s, ok := args[0].(string); ok {
-			serviceName = s
+	// Get the parameters - pongo2 filters can receive parameters as comma-separated values
+	if param.IsString() && param.String() != "" {
+		// Parse parameters if provided as "service,secret"
+		parts := strings.Split(param.String(), ",")
+		if len(parts) > 0 && parts[0] != "" {
+			serviceName = strings.TrimSpace(parts[0])
 		}
-	}
-	if len(args) > 1 {
-		if s, ok := args[1].(string); ok {
-			secretName = s
+		if len(parts) > 1 && parts[1] != "" {
+			secretName = strings.TrimSpace(parts[1])
 		}
 	}
 
-	return GetKeyringSecret(serviceName, secretName)
+	secret, err := GetKeyringSecret(serviceName, secretName)
+	if err != nil {
+		return nil, &pongo2.Error{
+			Sender:    "filter:keyring",
+			OrigError: err,
+		}
+	}
+
+	return pongo2.AsValue(secret), nil
 }
 
 // NewTemplateRenderer creates a new template renderer with global environment variables
@@ -52,9 +63,6 @@ func NewTemplateRenderer() *TemplateRenderer {
 	}
 	renderer.context["env"] = envMap
 
-	// Add keyring function as a callable
-	renderer.context["keyring"] = keyringFunc{}
-
 	return renderer
 }
 
@@ -72,14 +80,14 @@ func (r *TemplateRenderer) Render(templateStr string, params map[string]interfac
 	// Parse and execute template using pongo2
 	tpl, err := pongo2.FromString(templateStr)
 	if err != nil {
-		// If template parsing fails, return original string
-		return templateStr, nil
+		// Return error instead of silently failing
+		return "", fmt.Errorf("failed to parse template: %w", err)
 	}
 
 	result, err := tpl.Execute(ctx)
 	if err != nil {
-		// If execution fails, return original string
-		return templateStr, nil
+		// Return error instead of silently failing
+		return "", fmt.Errorf("failed to execute template: %w", err)
 	}
 
 	return result, nil
