@@ -172,7 +172,7 @@ func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) error {
 
 	if dryRun {
 		// Build work item payload (without test steps)
-		workItemPayload := i.buildWorkItemPayload(testCase)
+		workItemPayload := i.buildWorkItemPayload(testCase, "")
 		i.logger.Println("DRY RUN: Would create test case with payload:")
 		payloadJSON, _ := json.MarshalIndent(workItemPayload, "", "  ")
 		fmt.Println(string(payloadJSON))
@@ -199,16 +199,30 @@ func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) error {
 	var workItemCreated bool
 
 	if existingWorkItemData != nil {
-		// Work item already exists
+		// Work item already exists - update it
 		workItemID = existingWorkItemData.ID
-		i.logger.Printf("⚠ Work item already exists: %s (ID: %s). Skipping creation.\n", testCase.ID, workItemID)
+		i.logger.Printf("⚠ Work item already exists: %s (ID: %s). Updating work item...\n", testCase.ID, workItemID)
+
+		// Extract just the ID part (e.g., "OCP-85835" from "OSE/OCP-85835")
+		workItemIDOnly := extractWorkItemID(workItemID)
+
+		// Build work item payload for update (with full ID including project)
+		workItemPayload := i.buildWorkItemPayload(testCase, workItemID)
+
+		// Update work item
+		_, err := i.client.UpdateWorkItem(workItemIDOnly, workItemPayload)
+		if err != nil {
+			return fmt.Errorf("failed to update work item: %w", err)
+		}
+
+		i.logger.Printf("✓ Successfully updated work item: %s\n", testCase.ID)
 		workItemCreated = false
 	} else {
 		// Work item doesn't exist, create it
 		i.logger.Printf("Work item does not exist. Creating new work item...\n")
 
-		// Build work item payload (without test steps)
-		workItemPayload := i.buildWorkItemPayload(testCase)
+		// Build work item payload (without test steps, no ID for creation)
+		workItemPayload := i.buildWorkItemPayload(testCase, "")
 
 		// Create work item
 		response, err := i.client.CreateWorkItem(workItemPayload)
@@ -290,8 +304,9 @@ func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) error {
 	return nil
 }
 
-// buildWorkItemPayload builds the work item creation payload (without test steps)
-func (i *Importer) buildWorkItemPayload(testCase *TestCase) *WorkItemPayload {
+// buildWorkItemPayload builds the work item creation/update payload (without test steps)
+// If workItemID is provided (non-empty), it sets the ID field for PATCH operations
+func (i *Importer) buildWorkItemPayload(testCase *TestCase, workItemID string) *WorkItemPayload {
 	defaults := i.config.Polarion.TestCase.Defaults
 
 	// Build description HTML
@@ -299,13 +314,18 @@ func (i *Importer) buildWorkItemPayload(testCase *TestCase) *WorkItemPayload {
 
 	// Build attributes
 	attributes := map[string]interface{}{
-		"type":  i.config.Polarion.TestCase.WorkItemType,
 		"title": testCase.Title,
 		"description": TextContent{
 			Type:  "text/html",
 			Value: description,
 		},
-		"caseID": testCase.ID,
+	}
+
+	// For CREATE operations, include type and caseID
+	// For UPDATE operations, these are read-only
+	if workItemID == "" {
+		attributes["type"] = i.config.Polarion.TestCase.WorkItemType
+		attributes["caseID"] = testCase.ID
 	}
 
 	// Add category if present
@@ -363,13 +383,18 @@ func (i *Importer) buildWorkItemPayload(testCase *TestCase) *WorkItemPayload {
 		}
 	}
 
+	workItemData := WorkItemData{
+		Type:       "workitems",
+		Attributes: attributes,
+	}
+
+	// For PATCH operations, set the ID field
+	if workItemID != "" {
+		workItemData.ID = workItemID
+	}
+
 	return &WorkItemPayload{
-		Data: []WorkItemData{
-			{
-				Type:       "workitems",
-				Attributes: attributes,
-			},
-		},
+		Data: []WorkItemData{workItemData},
 	}
 }
 

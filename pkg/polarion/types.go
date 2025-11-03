@@ -64,6 +64,7 @@ type WorkItemPayload struct {
 // WorkItemData represents a single work item in the payload
 type WorkItemData struct {
 	Type       string                 `json:"type"`
+	ID         string                 `json:"id,omitempty"` // Required for PATCH, omitted for POST
 	Attributes map[string]interface{} `json:"attributes"`
 }
 

@@ -252,7 +252,7 @@ func TestBuildWorkItemPayload(t *testing.T) {
 			}
 
 			// Build payload
-			payload := importer.buildWorkItemPayload(tt.testCase)
+			payload := importer.buildWorkItemPayload(tt.testCase, "")
 
 			// Verify payload structure
 			if payload == nil {

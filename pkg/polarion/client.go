@@ -162,6 +162,65 @@ func (c *Client) CreateWorkItem(payload *WorkItemPayload) (*WorkItemResponse, er
 	return &result, nil
 }
 
+// UpdateWorkItem updates an existing work item in Polarion
+func (c *Client) UpdateWorkItem(workItemID string, payload *WorkItemPayload) (*WorkItemResponse, error) {
+	url := fmt.Sprintf("%s/projects/%s/workitems/%s", c.baseURL, c.config.Polarion.ProjectID, workItemID)
+
+	// For PATCH, convert array to single object format
+	// API expects: {"data": {...}} not {"data": [{...}]}
+	var updatePayload interface{}
+	if len(payload.Data) > 0 {
+		updatePayload = map[string]interface{}{
+			"data": payload.Data[0],
+		}
+	} else {
+		return nil, fmt.Errorf("no work item data in payload")
+	}
+
+	resp, err := c.doRequest("PATCH", url, updatePayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update work item: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Accept both 200 OK and 204 No Content as success
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return nil, fmt.Errorf("failed to update work item (status %d): %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	// If status is 204 (No Content), return empty response
+	if resp.StatusCode == http.StatusNoContent {
+		return &WorkItemResponse{}, nil
+	}
+
+	// Response might also be a single object, need to handle both formats
+	var responseData map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &responseData); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	// Normalize the response to array format for consistency
+	var result WorkItemResponse
+	if data, ok := responseData["data"]; ok {
+		// If data is already an array, use it directly
+		if dataArray, ok := data.([]interface{}); ok {
+			dataJSON, _ := json.Marshal(map[string]interface{}{"data": dataArray})
+			json.Unmarshal(dataJSON, &result)
+		} else {
+			// If data is a single object, wrap it in an array
+			dataJSON, _ := json.Marshal(map[string]interface{}{"data": []interface{}{data}})
+			json.Unmarshal(dataJSON, &result)
+		}
+	}
+
+	return &result, nil
+}
+
 // GetTestSteps retrieves test steps for a work item
 func (c *Client) GetTestSteps(workItemID string) (*TestStepsResponse, error) {
 	url := fmt.Sprintf("%s/projects/%s/workitems/%s/teststeps",
