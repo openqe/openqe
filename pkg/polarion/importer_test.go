@@ -312,3 +312,51 @@ func TestBuildWorkItemPayload(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractWorkItemID(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "Full ID with project prefix",
+			input:    "OSE/OCP-85835",
+			expected: "OCP-85835",
+		},
+		{
+			name:     "Full ID with different project",
+			input:    "PROJECT/ITEM-123",
+			expected: "ITEM-123",
+		},
+		{
+			name:     "ID without prefix",
+			input:    "OCP-85835",
+			expected: "OCP-85835",
+		},
+		{
+			name:     "ID with multiple slashes (take last)",
+			input:    "PROJECT/SPACE/OCP-85835",
+			expected: "OCP-85835",
+		},
+		{
+			name:     "Empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "Single slash at end",
+			input:    "PROJECT/",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractWorkItemID(tt.input)
+			if result != tt.expected {
+				t.Errorf("extractWorkItemID(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

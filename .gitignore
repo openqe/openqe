@@ -39,3 +39,8 @@ bin/
 # .vscode/
 out/
 tmp/
+config.local.yaml
+.vscode/
+test_cases.yaml
+example-polarion-config.yaml
+example-test-cases.yaml

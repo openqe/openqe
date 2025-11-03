@@ -149,7 +149,9 @@ func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) error {
 	// Add test steps if present
 	if len(testCase.Steps) > 0 {
 		testStepsPayload := i.buildTestStepsPayload(testCase.Steps)
-		if err := i.client.AddTestSteps(workItemID, testStepsPayload); err != nil {
+		// Extract just the ID part (e.g., "OCP-85835" from "OSE/OCP-85835")
+		workItemIDOnly := extractWorkItemID(workItemID)
+		if err := i.client.AddTestSteps(workItemIDOnly, testStepsPayload); err != nil {
 			return fmt.Errorf("work item created but failed to add test steps: %w", err)
 		}
 		i.logger.Printf("✓ Successfully added %d test steps\n", len(testCase.Steps))
@@ -316,4 +318,15 @@ func snakeToCamel(s string) string {
 	}
 
 	return result
+}
+
+// extractWorkItemID extracts the work item ID from the full ID returned by Polarion
+// For example: "OSE/OCP-85835" -> "OCP-85835"
+func extractWorkItemID(fullID string) string {
+	// If there's a slash, take the part after it
+	if idx := strings.LastIndex(fullID, "/"); idx >= 0 {
+		return fullID[idx+1:]
+	}
+	// Otherwise return the full ID as is
+	return fullID
 }
