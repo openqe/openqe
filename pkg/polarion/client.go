@@ -98,7 +98,10 @@ func (c *Client) TestConnection() error {
 
 // GetWorkItem retrieves a work item from Polarion by ID
 func (c *Client) GetWorkItem(workItemID string) (*WorkItemResponseData, error) {
-	url := fmt.Sprintf("%s/projects/%s/workitems/%s", c.baseURL, c.config.Polarion.ProjectID, workItemID)
+	// Request all relevant fields explicitly
+	fields := "id,type,title,description,status,priority,component,level,testType"
+	url := fmt.Sprintf("%s/projects/%s/workitems/%s?fields[workitems]=%s",
+		c.baseURL, c.config.Polarion.ProjectID, workItemID, fields)
 
 	resp, err := c.doRequest("GET", url, nil)
 	if err != nil {

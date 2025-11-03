@@ -12,6 +12,7 @@ func NewCommand() *cobra.Command {
 		SilenceErrors: true,
 	}
 	cmd.AddCommand(NewImportCommand())
+	cmd.AddCommand(NewInspectCommand())
 	cmd.Run = func(cmd *cobra.Command, args []string) {
 		cmd.Help()
 	}

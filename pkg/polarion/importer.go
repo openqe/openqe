@@ -70,6 +70,55 @@ func (i *Importer) TestConnection() error {
 	return i.client.TestConnection()
 }
 
+// InspectWorkItem retrieves and displays a work item's structure
+func (i *Importer) InspectWorkItem(workItemID string) error {
+	i.logger.Printf("Fetching work item: %s\n", workItemID)
+
+	workItem, err := i.client.GetWorkItem(workItemID)
+	if err != nil {
+		return fmt.Errorf("failed to get work item: %w", err)
+	}
+
+	if workItem == nil {
+		return fmt.Errorf("work item not found: %s", workItemID)
+	}
+
+	// Pretty print the work item
+	fmt.Println("\n" + strings.Repeat("=", 80))
+	fmt.Printf("Work Item: %s\n", workItemID)
+	fmt.Println(strings.Repeat("=", 80))
+
+	fmt.Printf("\nType: %s\n", workItem.Type)
+	fmt.Printf("ID: %s\n", workItem.ID)
+
+	fmt.Println("\nAttributes:")
+	fmt.Println(strings.Repeat("-", 80))
+
+	// Pretty print attributes in JSON format
+	attributesJSON, err := json.MarshalIndent(workItem.Attributes, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal attributes: %w", err)
+	}
+
+	fmt.Println(string(attributesJSON))
+	fmt.Println(strings.Repeat("=", 80))
+
+	// Highlight key fields
+	fmt.Println("\nKey Field Values:")
+	fmt.Println(strings.Repeat("-", 80))
+
+	keyFields := []string{"component", "level", "testType", "type", "title", "status", "priority"}
+	for _, field := range keyFields {
+		if value, ok := workItem.Attributes[field]; ok {
+			fmt.Printf("  %-15s: %v\n", field, value)
+		}
+	}
+
+	fmt.Println(strings.Repeat("=", 80) + "\n")
+
+	return nil
+}
+
 // ImportAll imports all test cases
 func (i *Importer) ImportAll(dryRun bool) error {
 	// Test connection first (skip in dry-run mode)
@@ -178,7 +227,7 @@ func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) error {
 
 	// Add test steps if present
 	if len(testCase.Steps) > 0 {
-		// Extract just the ID part (e.g., "OCP-85835" from "OSE/OCP-85835")
+		// Extract just the ID part (e.g., "TEST-123" from "PRJ/TEST-123")
 		workItemIDOnly := extractWorkItemID(workItemID)
 
 		// Check if test steps already exist
@@ -402,7 +451,7 @@ func snakeToCamel(s string) string {
 }
 
 // extractWorkItemID extracts the work item ID from the full ID returned by Polarion
-// For example: "OSE/OCP-85835" -> "OCP-85835"
+// For example: "PRJ/TEST-123" -> "TEST-123"
 func extractWorkItemID(fullID string) string {
 	// If there's a slash, take the part after it
 	if idx := strings.LastIndex(fullID, "/"); idx >= 0 {
