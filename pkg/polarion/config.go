@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/openqe/openqe/pkg/common"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,7 +23,7 @@ func LoadConfig(configFile string) (*Config, error) {
 	}
 
 	// Process through Jinja2 template with keyring support
-	renderer := NewTemplateRenderer()
+	renderer := common.NewTemplateRenderer()
 	renderedContent, err := renderer.Render(string(configContent), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render config template: %w", err)

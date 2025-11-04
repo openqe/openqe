@@ -1,4 +1,4 @@
-package polarion
+package common
 
 import (
 	"fmt"
@@ -15,13 +15,15 @@ type TemplateRenderer struct {
 }
 
 func init() {
-	// Register keyring as a global function in pongo2
+	// Register keyring as a global filter in pongo2
 	pongo2.RegisterFilter("keyring", keyringFilter)
 }
 
 // keyringFilter is a pongo2 filter that retrieves secrets from keyring
+// Usage: {{ ”|keyring:'service,secret' }}
+// If not provided, defaults to 'default,api_key'
 func keyringFilter(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
-	serviceName := "polarion"
+	serviceName := "default"
 	secretName := "api_key"
 
 	// Get the parameters - pongo2 filters can receive parameters as comma-separated values
@@ -80,13 +82,11 @@ func (r *TemplateRenderer) Render(templateStr string, params map[string]interfac
 	// Parse and execute template using pongo2
 	tpl, err := pongo2.FromString(templateStr)
 	if err != nil {
-		// Return error instead of silently failing
 		return "", fmt.Errorf("failed to parse template: %w", err)
 	}
 
 	result, err := tpl.Execute(ctx)
 	if err != nil {
-		// Return error instead of silently failing
 		return "", fmt.Errorf("failed to execute template: %w", err)
 	}
 
@@ -96,7 +96,7 @@ func (r *TemplateRenderer) Render(templateStr string, params map[string]interfac
 // GetKeyringSecret retrieves a secret from the system keyring
 func GetKeyringSecret(serviceName, secretName string) (string, error) {
 	if serviceName == "" {
-		serviceName = "polarion"
+		serviceName = "default"
 	}
 	if secretName == "" {
 		secretName = "api_key"
@@ -104,7 +104,7 @@ func GetKeyringSecret(serviceName, secretName string) (string, error) {
 
 	secret, err := keyring.Get(serviceName, secretName)
 	if err != nil {
-		return "", fmt.Errorf("failed to get secret from keyring: %w", err)
+		return "", fmt.Errorf("failed to get secret from keyring (service=%s, key=%s): %w", serviceName, secretName, err)
 	}
 
 	return secret, nil
