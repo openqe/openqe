@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/openqe/openqe/pkg/common"
 	"github.com/openqe/openqe/pkg/tls"
 	"github.com/openqe/openqe/pkg/utils"
 	"k8s.io/apimachinery/pkg/util/errors"
@@ -41,14 +42,14 @@ func (o *OcpOptions) Validate() error {
 }
 
 type ImageRegistryOptions struct {
-	OcpOpts   *OcpOptions
-	PkiOpts   *tls.PKIOptions
-	Namespace string
-	Image     string
-	Name      string
-	User      string
-	Password  string
-	Verbose   bool
+	OcpOpts    *OcpOptions
+	PkiOpts    *tls.PKIOptions
+	Namespace  string
+	Image      string
+	Name       string
+	User       string
+	Password   string
+	GlobalOpts *common.GlobalOptions
 }
 
 func DefaultImageRegistryOptions() *ImageRegistryOptions {
@@ -60,7 +61,6 @@ func DefaultImageRegistryOptions() *ImageRegistryOptions {
 		Image:     "quay.io/openshifttest/registry:2",
 		User:      "reg-user",
 		Password:  "reg-pass",
-		Verbose:   false,
 	}
 	return opts
 }
@@ -84,7 +84,7 @@ type DockerPullSecretOptions struct {
 	DockerCfg  *DockerConfig
 	Namespace  string
 	SecretName string
-	Verbose    bool
+	GlobalOpts *common.GlobalOptions
 }
 
 func DefaultDockerPullSecretOptions() *DockerPullSecretOptions {

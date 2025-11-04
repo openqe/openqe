@@ -3,6 +3,7 @@ package polarion
 import (
 	"fmt"
 
+	"github.com/openqe/openqe/pkg/common"
 	"github.com/openqe/openqe/pkg/polarion"
 	"github.com/spf13/cobra"
 )
@@ -10,11 +11,13 @@ import (
 type InspectOptions struct {
 	ConfigFile string
 	WorkItemID string
-	Verbose    bool
+	GlobalOpts *common.GlobalOptions
 }
 
-func NewInspectCommand() *cobra.Command {
-	opts := &InspectOptions{}
+func NewInspectCommand(globalOpts *common.GlobalOptions) *cobra.Command {
+	opts := &InspectOptions{
+		GlobalOpts: globalOpts,
+	}
 
 	cmd := &cobra.Command{
 		Use:   "inspect [work-item-id]",
@@ -36,7 +39,7 @@ Examples:
 			opts.WorkItemID = args[0]
 
 			// Create importer instance to reuse config/client
-			importer, err := polarion.NewImporter(opts.ConfigFile, opts.Verbose)
+			importer, err := polarion.NewImporter(opts.ConfigFile, opts.GlobalOpts)
 			if err != nil {
 				return fmt.Errorf("failed to create importer: %w", err)
 			}
@@ -47,7 +50,6 @@ Examples:
 	}
 
 	cmd.Flags().StringVarP(&opts.ConfigFile, "config", "c", "config.local.yaml", "Path to configuration file")
-	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "Enable verbose logging")
 
 	return cmd
 }

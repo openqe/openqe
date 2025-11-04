@@ -19,6 +19,7 @@ import (
 	core "github.com/openqe/openqe/cmd/core"
 	"github.com/openqe/openqe/cmd/openshift"
 	"github.com/openqe/openqe/cmd/polarion"
+	"github.com/openqe/openqe/pkg/common"
 	"github.com/spf13/cobra"
 )
 
@@ -59,29 +60,33 @@ func VersionString() string {
 	return fmt.Sprintf("%s version: %s, (Revision: %s)", NAME, getVersion(), GetRevision())
 }
 
-func VersionCommand() *cobra.Command {
+func VersionCommand(globalOpts *common.GlobalOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "version",
 		Short:        "Show current version",
 		SilenceUsage: true,
 	}
 
+	logger := common.NewLoggerFromOptions(globalOpts, "VERSION")
+
 	cmd.Run = func(cmd *cobra.Command, args []string) {
-		cmd.Printf("%s\n", VersionString())
+		logger.Info("%s", VersionString())
 	}
 	return cmd
 
 }
-func addCommands(rootCommand *cobra.Command) {
-	rootCommand.AddCommand(VersionCommand())
-	rootCommand.AddCommand(core.NewTLSCommand())
-	rootCommand.AddCommand(openshift.NewCommand())
-	rootCommand.AddCommand(auth.NewAuthCommand())
-	rootCommand.AddCommand(polarion.NewCommand())
-	rootCommand.AddCommand(core.NewDocCommand(rootCommand))
+func addCommands(rootCommand *cobra.Command, globalOpts *common.GlobalOptions) {
+	rootCommand.AddCommand(VersionCommand(globalOpts))
+	rootCommand.AddCommand(core.NewTLSCommand(globalOpts))
+	rootCommand.AddCommand(openshift.NewCommand(globalOpts))
+	rootCommand.AddCommand(auth.NewAuthCommand(globalOpts))
+	rootCommand.AddCommand(polarion.NewCommand(globalOpts))
+	rootCommand.AddCommand(core.NewDocCommand(rootCommand, globalOpts))
 }
 
 func main() {
+	globalOpts := common.DefaultGlobalOptions()
+
 	cmd := &cobra.Command{
 		Use:               NAME,
 		SilenceUsage:      true,
@@ -93,11 +98,15 @@ func main() {
 		},
 	}
 
+	// Add global flags
+	cmd.PersistentFlags().BoolVarP(&globalOpts.Verbose, "verbose", "v", false, "Enable verbose (debug) logging")
+	cmd.PersistentFlags().BoolVarP(&globalOpts.Yes, "yes", "y", false, "Automatically confirm all prompts")
+
 	cmd.Version = VersionString()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	addCommands(cmd)
+	addCommands(cmd, globalOpts)
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT)

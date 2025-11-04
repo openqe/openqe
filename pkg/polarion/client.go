@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
+
+	"github.com/openqe/openqe/pkg/common"
 )
 
 // Client represents a Polarion API client
@@ -15,22 +16,18 @@ type Client struct {
 	config     *Config
 	baseURL    string
 	httpClient *http.Client
-	logger     *log.Logger
+	logger     *common.Logger
 }
 
 // NewClient creates a new Polarion API client
-func NewClient(config *Config, verbose bool) (*Client, error) {
+func NewClient(config *Config, globalOpts *common.GlobalOptions) (*Client, error) {
+	logger := common.NewLoggerFromOptions(globalOpts, "POLARION")
+
 	client := &Client{
 		config:     config,
 		baseURL:    buildBaseURL(config.Polarion.ServerURL),
 		httpClient: &http.Client{},
-	}
-
-	// Setup logger
-	if verbose {
-		client.logger = log.New(log.Writer(), "[POLARION] ", log.LstdFlags)
-	} else {
-		client.logger = log.New(io.Discard, "", 0)
+		logger:     logger,
 	}
 
 	return client, nil
@@ -53,7 +50,7 @@ func (c *Client) doRequest(method, url string, body interface{}) (*http.Response
 		reqBody = bytes.NewBuffer(jsonData)
 
 		// Log request payload in verbose mode
-		c.logger.Printf("Request Payload: %s", string(jsonData))
+		c.logger.Debug("Request Payload: %s", string(jsonData))
 	}
 
 	req, err := http.NewRequest(method, url, reqBody)
@@ -72,7 +69,7 @@ func (c *Client) doRequest(method, url string, body interface{}) (*http.Response
 		req.SetBasicAuth(c.config.Polarion.Auth.Username, c.config.Polarion.Auth.Password)
 	}
 
-	c.logger.Printf("%s %s", method, url)
+	c.logger.Debug("%s %s", method, url)
 
 	return c.httpClient.Do(req)
 }
@@ -88,7 +85,7 @@ func (c *Client) TestConnection() error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
-		fmt.Printf("✓ Successfully connected to Polarion project: %s\n", c.config.Polarion.ProjectID)
+		c.logger.Info("✓ Successfully connected to Polarion project: %s", c.config.Polarion.ProjectID)
 		return nil
 	}
 
@@ -279,7 +276,7 @@ func (c *Client) DeleteTestSteps(workItemID string, existingSteps *TestStepsResp
 			payload = &TestStepsDeletePayload{
 				Data: deleteData,
 			}
-			c.logger.Printf("Deleting %d test steps with IDs\n", len(deleteData))
+			c.logger.Debug("Deleting %d test steps with IDs", len(deleteData))
 		}
 	}
 

@@ -12,11 +12,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/openqe/openqe/pkg/common"
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 )
 
-func NewDocCommand(rootCmd *cobra.Command) *cobra.Command {
+func NewDocCommand(rootCmd *cobra.Command, globalOpts *common.GlobalOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "doc",
 		Short:        "Documentation related commands",
@@ -25,8 +26,8 @@ func NewDocCommand(rootCmd *cobra.Command) *cobra.Command {
 	cmd.Run = func(cmd *cobra.Command, args []string) {
 		cmd.Help()
 	}
-	cmd.AddCommand(NewCobraDocGenCmd(rootCmd))
-	cmd.AddCommand(NewDocDumpCmd(rootCmd))
+	cmd.AddCommand(NewCobraDocGenCmd(rootCmd, globalOpts))
+	cmd.AddCommand(NewDocDumpCmd(rootCmd, globalOpts))
 	return cmd
 }
 
@@ -36,7 +37,7 @@ type DocGenOptions struct {
 
 var opts = &DocGenOptions{}
 
-func NewCobraDocGenCmd(rootCmd *cobra.Command) *cobra.Command {
+func NewCobraDocGenCmd(rootCmd *cobra.Command, globalOpts *common.GlobalOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "cobra-doc-gen",
 		Short:        "Generate the markdown documentation for the CLI",
@@ -45,11 +46,13 @@ func NewCobraDocGenCmd(rootCmd *cobra.Command) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Output, "output", opts.Output, "The CA certificate subject used to generate the TLS CA.")
 	cmd.MarkFlagRequired("output")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		logger := common.NewLoggerFromOptions(globalOpts, "DOC")
+
 		err := doc.GenMarkdownTree(rootCmd, opts.Output)
 		if err != nil {
-			return fmt.Errorf("Failed to generate the documentation: %v\n", err)
+			return fmt.Errorf("Failed to generate the documentation: %v", err)
 		}
-		cmd.Printf("The documentation is generated to %s\n", opts.Output)
+		logger.Info("The documentation is generated to %s", opts.Output)
 		return nil
 	}
 	return cmd
@@ -92,7 +95,7 @@ type DocDumpOptions struct {
 	OutDir         string // the output directory for the JSON files
 }
 
-func NewDocDumpCmd(rootCmd *cobra.Command) *cobra.Command {
+func NewDocDumpCmd(rootCmd *cobra.Command, globalOpts *common.GlobalOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "doc-dump",
 		Short:        "Dump public API docs of a Go project to JSON format",
@@ -105,6 +108,8 @@ func NewDocDumpCmd(rootCmd *cobra.Command) *cobra.Command {
 	cmd.MarkFlagRequired("out-dir")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		logger := common.NewLoggerFromOptions(globalOpts, "DOC")
+
 		root := docDumpOpts.ProjectBaseDir
 		docs, err := parseProject(root)
 		if err != nil {
@@ -127,7 +132,7 @@ func NewDocDumpCmd(rootCmd *cobra.Command) *cobra.Command {
 				return fmt.Errorf("failed to encode json for package %s: %v", apiDoc.Package, err)
 			}
 		}
-		cmd.Printf("API docs dumped to %s\n", docDumpOpts.OutDir)
+		logger.Info("API docs dumped to %s", docDumpOpts.OutDir)
 		return nil
 	}
 	return cmd

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/openqe/openqe/pkg/common"
 	"github.com/openqe/openqe/pkg/exec"
 	"github.com/openqe/openqe/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -127,7 +128,7 @@ func DeleteDockerPullSecret(kubeconfig, namespace, secretName string) error {
 }
 
 // ValidateDockerPullSecret validates a Docker pull secret by testing Docker registry authentication
-func ValidateDockerPullSecret(kubeconfig, registryURL, pullSecretFile string, verbose bool) (bool, error) {
+func ValidateDockerPullSecret(kubeconfig, registryURL, pullSecretFile string, globalOpts *common.GlobalOptions) (bool, error) {
 	// For validation, we'll use the oc CLI to test the secret
 	// This is a simple test that tries to login to the registry
 
@@ -142,7 +143,7 @@ func ValidateDockerPullSecret(kubeconfig, registryURL, pullSecretFile string, ve
 			"--registry", registryURL,
 			"--registry-config", pullSecretFile,
 		},
-		Verbose: verbose,
+		Verbose: globalOpts.Verbose,
 	}
 	output, err := cli.Execute()
 	if err != nil {

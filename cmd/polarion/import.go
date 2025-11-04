@@ -3,6 +3,7 @@ package polarion
 import (
 	"fmt"
 
+	"github.com/openqe/openqe/pkg/common"
 	"github.com/openqe/openqe/pkg/polarion"
 	"github.com/spf13/cobra"
 )
@@ -11,13 +12,14 @@ type ImportOptions struct {
 	ConfigFile     string
 	TestCasesFile  string
 	DryRun         bool
-	Verbose        bool
 	TestConnection bool
-	AutoConfirm    bool
+	GlobalOpts     *common.GlobalOptions
 }
 
-func NewImportCommand() *cobra.Command {
-	opts := &ImportOptions{}
+func NewImportCommand(globalOpts *common.GlobalOptions) *cobra.Command {
+	opts := &ImportOptions{
+		GlobalOpts: globalOpts,
+	}
 
 	cmd := &cobra.Command{
 		Use:   "import",
@@ -48,7 +50,7 @@ Examples:
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Create importer instance
-			importer, err := polarion.NewImporter(opts.ConfigFile, opts.Verbose)
+			importer, err := polarion.NewImporter(opts.ConfigFile, opts.GlobalOpts)
 			if err != nil {
 				return fmt.Errorf("failed to create importer: %w", err)
 			}
@@ -56,11 +58,6 @@ Examples:
 			// Override test cases file if provided
 			if opts.TestCasesFile != "" {
 				importer.SetTestCasesFile(opts.TestCasesFile)
-			}
-
-			// Set auto-confirm flag
-			if opts.AutoConfirm {
-				importer.SetAutoConfirm(true)
 			}
 
 			// Test connection only
@@ -76,9 +73,7 @@ Examples:
 	cmd.Flags().StringVarP(&opts.ConfigFile, "config", "c", "config.local.yaml", "Path to configuration file")
 	cmd.Flags().StringVarP(&opts.TestCasesFile, "test-cases", "t", "", "Path to test cases file (overrides config)")
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Perform a dry run without actually creating test cases")
-	cmd.Flags().BoolVarP(&opts.Verbose, "verbose", "v", false, "Enable verbose logging")
 	cmd.Flags().BoolVar(&opts.TestConnection, "test-connection", false, "Only test the connection to Polarion server")
-	cmd.Flags().BoolVarP(&opts.AutoConfirm, "yes", "y", false, "Automatically confirm all prompts (useful for batch operations)")
 
 	return cmd
 }

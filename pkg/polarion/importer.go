@@ -5,35 +5,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"log"
 	"os"
 	"strings"
+
+	"github.com/openqe/openqe/pkg/common"
 )
 
 // Importer handles importing test cases to Polarion
 type Importer struct {
 	config        *Config
 	client        *Client
-	logger        *log.Logger
+	logger        *common.Logger
 	testCasesFile string
-	autoConfirm   bool
+	globalOpts    *common.GlobalOptions
 }
 
 // NewImporter creates a new Polarion importer
-func NewImporter(configFile string, verbose bool) (*Importer, error) {
+func NewImporter(configFile string, globalOpts *common.GlobalOptions) (*Importer, error) {
 	// Load configuration
 	config, err := LoadConfig(configFile)
 	if err != nil {
 		return nil, err
 	}
 
-	// Override verbose setting if provided
-	if verbose {
-		config.Verbose = true
-	}
+	// Create logger
+	logger := common.NewLoggerFromOptions(globalOpts, "IMPORTER")
 
 	// Create API client
-	client, err := NewClient(config, config.Verbose)
+	client, err := NewClient(config, globalOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -41,14 +40,9 @@ func NewImporter(configFile string, verbose bool) (*Importer, error) {
 	importer := &Importer{
 		config:        config,
 		client:        client,
+		logger:        logger,
 		testCasesFile: config.TestCasesFile,
-	}
-
-	// Setup logger
-	if config.Verbose {
-		importer.logger = log.New(os.Stdout, "[IMPORTER] ", log.LstdFlags)
-	} else {
-		importer.logger = log.New(os.Stdout, "", 0)
+		globalOpts:    globalOpts,
 	}
 
 	return importer, nil
@@ -59,20 +53,15 @@ func (i *Importer) SetTestCasesFile(file string) {
 	i.testCasesFile = file
 }
 
-// SetAutoConfirm sets whether to automatically confirm prompts
-func (i *Importer) SetAutoConfirm(autoConfirm bool) {
-	i.autoConfirm = autoConfirm
-}
-
 // TestConnection tests the connection to Polarion
 func (i *Importer) TestConnection() error {
-	i.logger.Println("Testing connection to Polarion server...")
+	i.logger.Info("Testing connection to Polarion server...")
 	return i.client.TestConnection()
 }
 
 // InspectWorkItem retrieves and displays a work item's structure
 func (i *Importer) InspectWorkItem(workItemID string) error {
-	i.logger.Printf("Fetching work item: %s\n", workItemID)
+	i.logger.Info("Fetching work item: %s", workItemID)
 
 	workItem, err := i.client.GetWorkItem(workItemID)
 	if err != nil {
@@ -135,7 +124,7 @@ func (i *Importer) ImportAll(dryRun bool) error {
 			return fmt.Errorf("connection test failed: %w", err)
 		}
 	} else {
-		i.logger.Println("DRY RUN MODE: Skipping connection test")
+		i.logger.Info("DRY RUN MODE: Skipping connection test")
 	}
 
 	// Load test cases
@@ -144,7 +133,7 @@ func (i *Importer) ImportAll(dryRun bool) error {
 		return err
 	}
 
-	i.logger.Printf("Loaded %d test cases\n", len(testCases))
+	i.logger.Info("Loaded %d test cases", len(testCases))
 
 	// Import each test case and collect results
 	var results []ImportResult
@@ -215,7 +204,7 @@ func (i *Importer) buildWorkItemURL(workItemID string) string {
 
 // createTestCase creates a single test case in Polarion and returns the result
 func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) ImportResult {
-	i.logger.Printf("Processing test case: %s - %s\n", testCase.ID, testCase.Title)
+	i.logger.Info("Processing test case: %s - %s", testCase.ID, testCase.Title)
 
 	result := ImportResult{
 		TestCaseID: testCase.ID,
@@ -224,14 +213,14 @@ func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) ImportResult 
 	if dryRun {
 		// Build work item payload (without test steps)
 		workItemPayload := i.buildWorkItemPayload(testCase, "")
-		i.logger.Println("DRY RUN: Would create test case with payload:")
+		i.logger.Info("DRY RUN: Would create test case with payload:")
 		payloadJSON, _ := json.MarshalIndent(workItemPayload, "", "  ")
 		fmt.Println(string(payloadJSON))
 
 		// Also show test steps payload
 		if len(testCase.Steps) > 0 {
 			testStepsPayload := i.buildTestStepsPayload(testCase.Steps)
-			i.logger.Println("\nDRY RUN: Would add test steps with payload:")
+			i.logger.Info("\nDRY RUN: Would add test steps with payload:")
 			stepsJSON, _ := json.MarshalIndent(testStepsPayload, "", "  ")
 			fmt.Println(string(stepsJSON))
 		}
@@ -242,11 +231,11 @@ func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) ImportResult 
 	}
 
 	// Check if work item already exists
-	i.logger.Printf("Checking if work item %s already exists...\n", testCase.ID)
+	i.logger.Debug("Checking if work item %s already exists...", testCase.ID)
 	existingWorkItemData, err := i.client.GetWorkItem(testCase.ID)
 	if err != nil {
 		result.Error = fmt.Errorf("failed to check if work item exists: %w", err)
-		i.logger.Printf("✗ Failed to create test case %s: %v\n", testCase.ID, result.Error)
+		i.logger.Error("✗ Failed to create test case %s: %v", testCase.ID, result.Error)
 		return result
 	}
 
@@ -256,7 +245,7 @@ func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) ImportResult 
 	if existingWorkItemData != nil {
 		// Work item already exists - update it
 		workItemID = existingWorkItemData.ID
-		i.logger.Printf("⚠ Work item already exists: %s (ID: %s). Updating work item...\n", testCase.ID, workItemID)
+		i.logger.Info("⚠ Work item already exists: %s (ID: %s). Updating work item...", testCase.ID, workItemID)
 
 		// Extract just the ID part (e.g., "TEST-123" from "PRJ/TEST-123")
 		workItemIDOnly := extractWorkItemID(workItemID)
@@ -268,17 +257,17 @@ func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) ImportResult 
 		_, err := i.client.UpdateWorkItem(workItemIDOnly, workItemPayload)
 		if err != nil {
 			result.Error = fmt.Errorf("failed to update work item: %w", err)
-			i.logger.Printf("✗ Failed to create test case %s: %v\n", testCase.ID, result.Error)
+			i.logger.Error("✗ Failed to create test case %s: %v", testCase.ID, result.Error)
 			return result
 		}
 
-		i.logger.Printf("✓ Successfully updated work item: %s\n", testCase.ID)
+		i.logger.Info("✓ Successfully updated work item: %s", testCase.ID)
 		result.WorkItemID = workItemID
 		result.Action = "updated"
 		workItemCreated = false
 	} else {
 		// Work item doesn't exist, create it
-		i.logger.Printf("Work item does not exist. Creating new work item...\n")
+		i.logger.Debug("Work item does not exist. Creating new work item...")
 
 		// Build work item payload (without test steps, no ID for creation)
 		workItemPayload := i.buildWorkItemPayload(testCase, "")
@@ -287,18 +276,18 @@ func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) ImportResult 
 		response, err := i.client.CreateWorkItem(workItemPayload)
 		if err != nil {
 			result.Error = err
-			i.logger.Printf("✗ Failed to create test case %s: %v\n", testCase.ID, result.Error)
+			i.logger.Error("✗ Failed to create test case %s: %v", testCase.ID, result.Error)
 			return result
 		}
 
 		if len(response.Data) == 0 {
 			result.Error = fmt.Errorf("no work item returned in response")
-			i.logger.Printf("✗ Failed to create test case %s: %v\n", testCase.ID, result.Error)
+			i.logger.Error("✗ Failed to create test case %s: %v", testCase.ID, result.Error)
 			return result
 		}
 
 		workItemID = response.Data[0].ID
-		i.logger.Printf("✓ Successfully created work item: %s (ID: %s)\n", testCase.ID, workItemID)
+		i.logger.Info("✓ Successfully created work item: %s (ID: %s)", testCase.ID, workItemID)
 		result.WorkItemID = workItemID
 		result.Action = "created"
 		workItemCreated = true
@@ -310,55 +299,55 @@ func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) ImportResult 
 		workItemIDOnly := extractWorkItemID(workItemID)
 
 		// Check if test steps already exist
-		i.logger.Printf("Checking for existing test steps...\n")
+		i.logger.Debug("Checking for existing test steps...")
 		existingSteps, err := i.client.GetTestSteps(workItemIDOnly)
 		if err != nil {
 			result.Error = fmt.Errorf("failed to check existing test steps: %w", err)
-			i.logger.Printf("✗ Failed to create test case %s: %v\n", testCase.ID, result.Error)
+			i.logger.Error("✗ Failed to create test case %s: %v", testCase.ID, result.Error)
 			return result
 		}
 
 		// Handle existing test steps
 		if existingSteps != nil && len(existingSteps.Data) > 0 {
-			i.logger.Printf("Found %d existing test steps.\n", len(existingSteps.Data))
+			i.logger.Info("Found %d existing test steps.", len(existingSteps.Data))
 
 			// Check if we should skip confirmation
-			shouldDelete := i.autoConfirm
-			if !i.autoConfirm {
+			shouldDelete := i.globalOpts.Yes
+			if !i.globalOpts.Yes {
 				// Ask user for confirmation before deleting
 				confirmMsg := fmt.Sprintf("⚠ Existing test steps will be deleted and replaced. Continue?")
 				shouldDelete = confirmAction(confirmMsg)
 			} else {
-				i.logger.Printf("Auto-confirm enabled - proceeding with deletion\n")
+				i.logger.Debug("Auto-confirm enabled - proceeding with deletion")
 			}
 
 			if !shouldDelete {
 				// User declined - print existing steps and skip recreation
 				fmt.Println("\nℹ Skipping test steps update. Showing existing test steps:")
 				i.printExistingTestSteps(existingSteps)
-				i.logger.Printf("✓ Work item processed (test steps unchanged)\n")
+				i.logger.Info("✓ Work item processed (test steps unchanged)")
 				return result
 			}
 
 			// User confirmed (or auto-confirmed) - proceed with deletion
-			i.logger.Printf("Deleting existing test steps...\n")
+			i.logger.Debug("Deleting existing test steps...")
 			if err := i.client.DeleteTestSteps(workItemIDOnly, existingSteps); err != nil {
 				result.Error = fmt.Errorf("failed to delete existing test steps: %w", err)
-				i.logger.Printf("✗ Failed to create test case %s: %v\n", testCase.ID, result.Error)
+				i.logger.Error("✗ Failed to create test case %s: %v", testCase.ID, result.Error)
 				return result
 			}
-			i.logger.Printf("✓ Successfully deleted existing test steps\n")
+			i.logger.Debug("✓ Successfully deleted existing test steps")
 		} else {
-			i.logger.Printf("No existing test steps found\n")
+			i.logger.Debug("No existing test steps found")
 		}
 
 		// Add new test steps
 		testStepsPayload := i.buildTestStepsPayload(testCase.Steps)
 
 		if workItemCreated {
-			i.logger.Printf("Adding %d test steps to newly created work item...\n", len(testCase.Steps))
+			i.logger.Debug("Adding %d test steps to newly created work item...", len(testCase.Steps))
 		} else {
-			i.logger.Printf("Adding %d test steps to existing work item...\n", len(testCase.Steps))
+			i.logger.Debug("Adding %d test steps to existing work item...", len(testCase.Steps))
 		}
 
 		if err := i.client.AddTestSteps(workItemIDOnly, testStepsPayload); err != nil {
@@ -367,10 +356,10 @@ func (i *Importer) createTestCase(testCase *TestCase, dryRun bool) ImportResult 
 			} else {
 				result.Error = fmt.Errorf("failed to add test steps to existing work item: %w", err)
 			}
-			i.logger.Printf("✗ Failed to create test case %s: %v\n", testCase.ID, result.Error)
+			i.logger.Error("✗ Failed to create test case %s: %v", testCase.ID, result.Error)
 			return result
 		}
-		i.logger.Printf("✓ Successfully added %d test steps\n", len(testCase.Steps))
+		i.logger.Debug("✓ Successfully added %d test steps", len(testCase.Steps))
 	}
 
 	return result
@@ -442,7 +431,7 @@ func (i *Importer) buildWorkItemPayload(testCase *TestCase, workItemID string) *
 		if value != "" {
 			camelKey := snakeToCamel(key)
 			attributes[camelKey] = value
-			i.logger.Printf("  Adding custom attribute %s (as %s): %v\n", key, camelKey, value)
+			i.logger.Debug("  Adding custom attribute %s (as %s): %v", key, camelKey, value)
 		}
 	}
 
@@ -451,7 +440,7 @@ func (i *Importer) buildWorkItemPayload(testCase *TestCase, workItemID string) *
 		camelKey := snakeToCamel(key)
 		if _, exists := attributes[camelKey]; !exists && value != nil {
 			attributes[camelKey] = value
-			i.logger.Printf("  Adding default %s (as %s): %v\n", key, camelKey, value)
+			i.logger.Debug("  Adding default %s (as %s): %v", key, camelKey, value)
 		}
 	}
 

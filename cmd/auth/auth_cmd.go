@@ -4,17 +4,18 @@ import (
 	"fmt"
 
 	"github.com/openqe/openqe/pkg/auth"
+	"github.com/openqe/openqe/pkg/common"
 	"github.com/spf13/cobra"
 )
 
-func NewAuthCommand() *cobra.Command {
+func NewAuthCommand(globalOpts *common.GlobalOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "auth",
 		Short:         "Authentication related commands",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	cmd.AddCommand(NewHtpasswdCommand())
+	cmd.AddCommand(NewHtpasswdCommand(globalOpts))
 	cmd.Run = func(cmd *cobra.Command, args []string) {
 		cmd.Help()
 	}
@@ -22,28 +23,36 @@ func NewAuthCommand() *cobra.Command {
 }
 
 type HtpasswdOption struct {
-	username string
-	password string
+	username   string
+	password   string
+	globalOpts *common.GlobalOptions
 }
 
-func NewHtpasswdCommand() *cobra.Command {
+func NewHtpasswdCommand(globalOpts *common.GlobalOptions) *cobra.Command {
+	opts := &HtpasswdOption{
+		globalOpts: globalOpts,
+	}
+
 	cmd := &cobra.Command{
 		Use:           "htpasswd",
 		Short:         "Create Bcrypt credentials like Apache htpasswd",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	opts := &HtpasswdOption{}
+
 	cmd.Flags().StringVar(&opts.username, "username", opts.username, "The username")
 	cmd.Flags().StringVar(&opts.password, "password", opts.password, "The password")
 	cmd.MarkFlagRequired("username")
 	cmd.MarkFlagRequired("password")
+
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
-		auth, err := auth.GenerateHtpasswdBcrypt(opts.username, opts.password)
+		logger := common.NewLoggerFromOptions(opts.globalOpts, "AUTH")
+
+		authCreds, err := auth.GenerateHtpasswdBcrypt(opts.username, opts.password)
 		if err != nil {
-			return fmt.Errorf("Failed to generate the auth credentials: %w\n", err)
+			return fmt.Errorf("Failed to generate the auth credentials: %w", err)
 		}
-		cmd.Printf("%s\n", auth)
+		logger.Info("htpasswd authentication credentials generated: %s", authCreds)
 		return nil
 	}
 	return cmd

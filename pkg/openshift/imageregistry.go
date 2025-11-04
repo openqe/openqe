@@ -16,7 +16,7 @@ import (
 func SetupImageRegistry(opts *ImageRegistryOptions) (string, error) {
 	_, _, log, err := GetOrCreateOCClient(opts.OcpOpts.KUBECONFIG)
 	if !utils.FileExists(opts.PkiOpts.CaGenOpt.CaCertFile) || !utils.FileExists(opts.PkiOpts.CaGenOpt.CaKeyFile) {
-		if opts.Verbose {
+		if opts.GlobalOpts != nil && opts.GlobalOpts.Verbose {
 			log.Info("CA: key: %s, cert: %s are not ready, create CA", opts.PkiOpts.CaGenOpt.CaKeyFile, opts.PkiOpts.CaGenOpt.CaCertFile)
 		}
 		if err := tls.GenerateCAToFiles(opts.PkiOpts.CaGenOpt); err != nil {
@@ -26,14 +26,18 @@ func SetupImageRegistry(opts *ImageRegistryOptions) (string, error) {
 	log.Info("CA is ready: ca key: %s, ca certificate: %s\n", opts.PkiOpts.CaGenOpt.CaKeyFile, opts.PkiOpts.CaGenOpt.CaCertFile)
 
 	// update cluster proxy with the additional trusted bundle
-	if err := ConfigureAdditionalCA(opts.OcpOpts.KUBECONFIG, opts.PkiOpts.CaGenOpt.CaCertFile, opts.Verbose); err != nil {
+	verbose := false
+	if opts.GlobalOpts != nil {
+		verbose = opts.GlobalOpts.Verbose
+	}
+	if err := ConfigureAdditionalCA(opts.OcpOpts.KUBECONFIG, opts.PkiOpts.CaGenOpt.CaCertFile, verbose); err != nil {
 		return "", err
 	}
 	log.Info("Additional CA configured")
 
 	// check tls cert/key
 	if !utils.FileExists(opts.PkiOpts.CertFile) || !utils.FileExists(opts.PkiOpts.KeyFile) {
-		if opts.Verbose {
+		if opts.GlobalOpts != nil && opts.GlobalOpts.Verbose {
 			log.Info("TLS key/cert pair: key: %s, cert: %s are not ready, create key/cert pairs\n", opts.PkiOpts.CaGenOpt.CaKeyFile, opts.PkiOpts.CaGenOpt.CaCertFile)
 		}
 		if opts.PkiOpts.DNSName == tls.DefaultPKIOptions().DNSName {
@@ -43,7 +47,7 @@ func SetupImageRegistry(opts *ImageRegistryOptions) (string, error) {
 				return "", err
 			}
 			opts.PkiOpts.DNSName = "*." + "apps." + baseDomain
-			if opts.Verbose {
+			if opts.GlobalOpts != nil && opts.GlobalOpts.Verbose {
 				log.Info("Set the TLS cert DNSName to %s\n", opts.PkiOpts.DNSName)
 			}
 		}

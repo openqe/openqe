@@ -1,9 +1,9 @@
 package polarion
 
 import (
-	"log"
-	"os"
 	"testing"
+
+	"github.com/openqe/openqe/pkg/common"
 )
 
 func TestSnakeToCamel(t *testing.T) {
@@ -248,7 +248,7 @@ func TestBuildWorkItemPayload(t *testing.T) {
 						},
 					},
 				},
-				logger: log.New(os.Stderr, "[TEST] ", 0),
+				logger: common.NewLogger(common.LogLevelDebug, "TEST"),
 			}
 
 			// Build payload
